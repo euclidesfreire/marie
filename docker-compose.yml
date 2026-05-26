@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: marie-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: marie
+      POSTGRES_PASSWORD: marie
+      POSTGRES_DB: marie
+    ports:
+      - "5433:5432"
+    volumes:
+      - marie_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marie -d marie"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  marie_postgres_data:

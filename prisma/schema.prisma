@@ -1,0 +1,443 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  PROFESSIONAL
+  ADMIN
+}
+
+enum PatientStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum AppointmentStatus {
+  DRAFT
+  IN_PROGRESS
+  FINISHED
+  REOPENED
+  CANCELED
+}
+
+enum AppointmentStep {
+  PREPARATION
+  ANAMNESIS
+  ASSESSMENT
+  CARE_PLAN
+  EXECUTION
+  EVOLUTION
+  COMPLETION
+}
+
+enum AppointmentStepStatus {
+  PENDING
+  CURRENT
+  COMPLETED
+  NEEDS_REVIEW
+  SKIPPED
+}
+
+enum MarieSuggestionStatus {
+  DRAFT
+  PROPOSED
+  APPLIED
+  REJECTED
+  CANCELED
+}
+
+enum FollowUpType {
+  RETURN
+  FOLLOW_UP
+  PROTOCOL_REVIEW
+  EVOLUTION_CHECK
+  INTERCURRENCE
+}
+
+enum FollowUpStatus {
+  OPEN
+  COMPLETED
+  CANCELED
+}
+
+enum AssessmentArea {
+  FACIAL
+  BODY
+  BOTH
+}
+
+enum SuggestionSource {
+  MANUAL
+  AI
+}
+
+enum SuggestionStatus {
+  DRAFT
+  WAITING_REVIEW
+  APPROVED
+  ADJUSTED
+  REJECTED
+}
+
+enum ValidationDecision {
+  APPROVED
+  APPROVED_WITH_ADJUSTMENTS
+  REJECTED
+}
+
+enum ProtocolSource {
+  MANUAL
+  AI_ASSISTED
+}
+
+enum ProtocolStatus {
+  DRAFT
+  REVIEWED
+  APPROVED
+  APPLIED
+}
+
+enum NoteOrigin {
+  PROFESSIONAL
+  AI
+}
+
+enum MarieMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum MarieActionStatus {
+  PROPOSED
+  CONFIRMED
+  APPLIED
+  CANCELED
+  FAILED
+}
+
+model User {
+  id          String   @id @default(cuid())
+  name        String
+  email       String   @unique
+  role        UserRole @default(PROFESSIONAL)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  patients       Patient[]
+  appointments   Appointment[]
+  validations    ProfessionalValidation[]
+  notes          ClinicalNote[]
+  marieActionLogs MarieActionLog[]
+}
+
+model Patient {
+  id            String        @id @default(cuid())
+  professionalId String
+  name          String
+  birthDate     DateTime
+  phone         String?
+  email         String?
+  gender        String?
+  document      String?
+  notes         String?
+  status        PatientStatus @default(ACTIVE)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  professional User @relation(fields: [professionalId], references: [id])
+  anamneses    Anamnesis[]
+  appointments Appointment[]
+  suggestions  ProtocolSuggestion[]
+  protocols    Protocol[]
+  evolutions   Evolution[]
+  clinicalNotes ClinicalNote[]
+  followUps    AppointmentFollowUp[]
+  marieSuggestions MarieSuggestion[]
+  marieMessages MarieMessage[]
+  marieActionLogs MarieActionLog[]
+}
+
+model Anamnesis {
+  id                    String   @id @default(cuid())
+  patientId             String
+  chiefComplaint        String
+  treatmentGoal         String?
+  allergies             String?
+  medications           String?
+  preExistingConditions String?
+  previousProcedures    String?
+  skinType              String?
+  skinSensitivity       String?
+  contraindications     String?
+  habits                String?
+  notes                 String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+model Appointment {
+  id             String            @id @default(cuid())
+  patientId      String
+  professionalId String
+  date           DateTime          @default(now())
+  dailyComplaint String?
+  evaluation     String?
+  conduct        String?
+  status         AppointmentStatus @default(DRAFT)
+  currentStep    AppointmentStep   @default(PREPARATION)
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  reopenedAt     DateTime?
+  reopenReason   String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  patient      Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  professional User    @relation(fields: [professionalId], references: [id])
+  assessment   AestheticAssessment?
+  suggestions  ProtocolSuggestion[]
+  protocols    Protocol[]
+  evolutions   Evolution[]
+  execution    AppointmentExecution?
+  stepStates   AppointmentStepState[]
+  followUps    AppointmentFollowUp[]
+  marieSuggestions MarieSuggestion[]
+  marieMessages MarieMessage[]
+  marieActionLogs MarieActionLog[]
+}
+
+model AppointmentStepState {
+  id            String                @id @default(cuid())
+  appointmentId String
+  step          AppointmentStep
+  status        AppointmentStepStatus @default(PENDING)
+  completedAt   DateTime?
+  reopenedAt    DateTime?
+  reviewedAt    DateTime?
+  notes         String?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@unique([appointmentId, step])
+}
+
+model AppointmentExecution {
+  id                  String   @id @default(cuid())
+  appointmentId       String   @unique
+  procedurePerformed  String
+  productsUsed        String?
+  equipmentParameters String?
+  duration            String?
+  professionalNotes   String?
+  incidents           String?
+  postCareGiven       String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+}
+
+model AestheticAssessment {
+  id                   String         @id @default(cuid())
+  appointmentId        String         @unique
+  assessedArea         AssessmentArea
+  professionalAnalysis String?
+  skinCondition        String?
+  bodyCondition        String?
+  perceivedRisks       String?
+  technicalNotes       String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+}
+
+model ProtocolSuggestion {
+  id                    String           @id @default(cuid())
+  patientId             String
+  appointmentId         String?
+  source                SuggestionSource @default(MANUAL)
+  title                 String
+  objective             String?
+  area                  AssessmentArea
+  suggestedActives      String?
+  suggestedTechniques   String?
+  suggestedEquipments   String?
+  contraindications     String?
+  warnings              String?
+  status                SuggestionStatus @default(DRAFT)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment  Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  validation   ProfessionalValidation?
+  adjustments  TechnicalAdjustment[]
+}
+
+model ProfessionalValidation {
+  id               String             @id @default(cuid())
+  suggestionId     String             @unique
+  professionalId   String
+  decision         ValidationDecision
+  justification    String?
+  criticalAnalysis String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  suggestion   ProtocolSuggestion @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+  professional User               @relation(fields: [professionalId], references: [id])
+}
+
+model TechnicalAdjustment {
+  id            String   @id @default(cuid())
+  suggestionId  String
+  changedField  String
+  previousValue String?
+  newValue      String
+  reason        String?
+  createdAt     DateTime @default(now())
+
+  suggestion ProtocolSuggestion @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+}
+
+model Protocol {
+  id                    String         @id @default(cuid())
+  patientId             String
+  appointmentId         String?
+  title                 String
+  objective             String?
+  indication            String?
+  contraindications     String?
+  postProcedureCare     String?
+  source                ProtocolSource @default(MANUAL)
+  status                ProtocolStatus @default(DRAFT)
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  steps       ProtocolStep[]
+}
+
+model ProtocolStep {
+  id          String   @id @default(cuid())
+  protocolId  String
+  order       Int
+  title       String
+  description String?
+  product     String?
+  duration    String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  protocol Protocol @relation(fields: [protocolId], references: [id], onDelete: Cascade)
+}
+
+model Evolution {
+  id                String   @id @default(cuid())
+  patientId         String
+  appointmentId     String?
+  summary           String
+  patientResponse   String?
+  professionalNotes String?
+  adjustmentsMade   String?
+  nextSteps         String?
+  returnDate         DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+}
+
+model ClinicalNote {
+  id             String     @id @default(cuid())
+  patientId      String
+  professionalId String
+  content        String
+  origin         NoteOrigin @default(PROFESSIONAL)
+  createdAt      DateTime   @default(now())
+
+  patient      Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  professional User    @relation(fields: [professionalId], references: [id])
+}
+
+model MarieSuggestion {
+  id            String                 @id @default(cuid())
+  patientId     String
+  appointmentId String?
+  step          AppointmentStep
+  type          String
+  title         String
+  content       String?
+  payload       Json
+  status        MarieSuggestionStatus  @default(PROPOSED)
+  createdAt     DateTime               @default(now())
+  appliedAt     DateTime?
+
+  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+}
+
+model AppointmentFollowUp {
+  id                String         @id @default(cuid())
+  appointmentId     String
+  patientId         String
+  date              DateTime       @default(now())
+  type              FollowUpType
+  summary           String
+  patientResponse   String?
+  professionalNotes String?
+  adjustments       String?
+  nextSteps         String?
+  status            FollowUpStatus @default(OPEN)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  patient     Patient     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+model MarieMessage {
+  id            String           @id @default(cuid())
+  patientId     String
+  appointmentId String?
+  role          MarieMessageRole
+  content       String
+  createdAt     DateTime         @default(now())
+
+  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+}
+
+model MarieActionLog {
+  id             String            @id @default(cuid())
+  patientId      String
+  appointmentId  String?
+  professionalId String
+  actionType     String
+  targetEntity   String?
+  targetId       String?
+  status         MarieActionStatus @default(PROPOSED)
+  payload        Json
+  result         Json?
+  createdAt      DateTime          @default(now())
+  confirmedAt    DateTime?
+
+  patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment  Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  professional User         @relation(fields: [professionalId], references: [id])
+}
