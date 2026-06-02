@@ -19,27 +19,27 @@ type ChatMessage = {
 
 const marieStepMocks: Record<string, { quickActions: string[]; defaultMessage: string }> = {
   PREPARATION: {
-    quickActions: ["Revisar histórico", "Sugerir perguntas complementares", "Iniciar atendimento"],
+    quickActions: ["Revisar histórico do paciente", "Sugerir perguntas complementares", "Iniciar atendimento"],
     defaultMessage: "Posso organizar o contexto inicial e preparar o atendimento."
   },
   ANAMNESIS: {
-    quickActions: ["Revisar anamnese", "Identificar contraindicações", "Sugerir perguntas complementares", "Resumir histórico"],
+    quickActions: ["Revisar anamnese e apontar lacunas", "Identificar contraindicações", "Sugerir perguntas complementares", "Resumir queixa e objetivo"],
     defaultMessage: "Posso revisar a anamnese, sugerir perguntas complementares ou identificar possíveis contraindicações."
   },
   ASSESSMENT: {
-    quickActions: ["Apoiar avaliação", "Revisar riscos", "Comparar com anamnese", "Sugerir pontos de atenção"],
+    quickActions: ["Apoiar avaliação facial", "Apoiar avaliação corporal", "Comparar avaliação com anamnese", "Sugerir pontos técnicos"],
     defaultMessage: "Posso apoiar a avaliação profissional com pontos de atenção e revisão de riscos."
   },
   CARE_PLAN: {
-    quickActions: ["Sugerir protocolo", "Ajustar plano", "Revisar contraindicações", "Gerar cuidados pós"],
+    quickActions: ["Gerar protocolo com base nos dados", "Gerar protocolo facial", "Gerar protocolo corporal", "Revisar contraindicações do protocolo", "Gerar cuidados pós e home care"],
     defaultMessage: "Posso sugerir um plano de cuidado para revisão profissional."
   },
   EXECUTION: {
-    quickActions: ["Registrar execução", "Revisar parâmetros", "Gerar orientação ao paciente", "Registrar intercorrência"],
+    quickActions: ["Sugerir registro da execução", "Gerar orientação pós-procedimento", "Registrar intercorrência", "Preparar evolução da sessão"],
     defaultMessage: "Posso ajudar a registrar o que foi executado e as orientações dadas ao paciente."
   },
   EVOLUTION: {
-    quickActions: ["Resumir evolução", "Comparar retorno anterior", "Sugerir próximos passos", "Gerar acompanhamento"],
+    quickActions: ["Gerar evolução da sessão", "Comparar com evolução anterior", "Sugerir próximos passos", "Preparar retorno"],
     defaultMessage: "Posso ajudar a escrever a evolução clínica e sugerir próximos passos."
   },
   COMPLETION: {
