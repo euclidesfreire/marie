@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { CommandSidebar } from "@/components/workspace/command-sidebar";
 import { MarieChat } from "@/components/workspace/marie-chat";
 import { PatientCarePanel } from "@/components/workspace/patient-care-panel";
+import { getMarieActionTargetStep, stepToCareTab } from "@/lib/ai/marie-action-drafts";
 
 export function MarieWorkspace({ data }: { data: any }) {
   const router = useRouter();
@@ -19,10 +20,7 @@ export function MarieWorkspace({ data }: { data: any }) {
 
   function editAction(action: MarieAction) {
     setDraftAction(action);
-    if (action.type.includes("PROTOCOL")) setActiveTab("Plano de cuidado");
-    else if (action.type.includes("EVOLUTION")) setActiveTab("Evolução");
-    else if (action.type.includes("CONTRAINDICATION")) setActiveTab("Anamnese");
-    else setActiveTab("Resumo");
+    setActiveTab(stepToCareTab(getMarieActionTargetStep(action, data.currentAppointment?.currentStep ?? "ANAMNESIS")));
     setMobileView("care");
   }
 

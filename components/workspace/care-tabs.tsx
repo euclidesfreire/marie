@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { labelFor } from "@/lib/labels";
 import { formatDate } from "@/lib/utils";
+import { getMarieActionTargetStep, mapMarieActionToStepDraft, stepToCareTab } from "@/lib/ai/marie-action-drafts";
 
 const flowSteps = [
   { key: "PREPARATION", label: "Preparação" },
@@ -23,7 +24,6 @@ const flowSteps = [
 
 const visibleFlowSteps = [
   { key: "ANAMNESIS", label: "Anamnese", shortLabel: "Anamnese" },
-  { key: "ASSESSMENT", label: "Avaliação", shortLabel: "Avaliação" },
   { key: "CARE_PLAN", label: "Plano de cuidado", shortLabel: "Plano" },
   { key: "EXECUTION", label: "Execução", shortLabel: "Execução" },
   { key: "EVOLUTION", label: "Evolução", shortLabel: "Evolução" },
@@ -41,6 +41,7 @@ type CareTabsProps = {
 };
 
 function labelFromStep(step?: string | null) {
+  if (step === "ASSESSMENT") return "Anamnese";
   return flowSteps.find((item) => item.key === step)?.label ?? "Anamnese";
 }
 
@@ -48,13 +49,19 @@ function stepFromLabel(label: string): StepKey {
   return flowSteps.find((item) => item.label === label)?.key ?? "ANAMNESIS";
 }
 
-function pickPayload(action?: MarieAction | null) {
-  return (action?.payload ?? {}) as Record<string, any>;
-}
-
 function formObject(formData: FormData) {
   return Object.fromEntries([...formData.entries()].map(([key, value]) => [key, value === "" ? null : value]));
 }
+
+function pickFields(source: Record<string, any>, fields: string[]) {
+  return fields.reduce<Record<string, any>>((payload, field) => {
+    payload[field] = source[field] ?? null;
+    return payload;
+  }, {});
+}
+
+const anamnesisFields = ["chiefComplaint", "treatmentGoal", "allergies", "medications", "preExistingConditions", "previousProcedures", "skinType", "skinSensitivity", "contraindications", "habits", "notes"];
+const assessmentFields = ["assessedArea", "professionalAnalysis", "skinCondition", "bodyCondition", "perceivedRisks", "technicalNotes"];
 
 function TextField({ label, name, value, textarea, required, type = "text" }: { label: string; name: string; value?: string | null; textarea?: boolean; required?: boolean; type?: string }) {
   return (
@@ -103,7 +110,7 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
   const stepStates = appointment?.stepStates ?? [];
   const currentStep = appointment?.currentStep ?? "ANAMNESIS";
   const activeStep = stepFromLabel(activeTab);
-  const draftPayload = pickPayload(draftAction);
+  const draftPayload = mapMarieActionToStepDraft(draftAction, activeStep);
 
   useEffect(() => {
     if (!appointment) return;
@@ -112,14 +119,8 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
 
   useEffect(() => {
     if (!draftAction) return;
-    if (draftAction.type.includes("PROTOCOL")) {
-      setActiveTab("Plano de cuidado");
-      setShowSuggestionForm(true);
-    }
-    if (draftAction.type.includes("EVOLUTION")) {
-      setActiveTab("Evolução");
-    }
-  }, [draftAction, setActiveTab]);
+    setActiveTab(stepToCareTab(getMarieActionTargetStep(draftAction, currentStep)));
+  }, [draftAction, currentStep, setActiveTab]);
 
   const pendings = useMemo(() => {
     const items: string[] = [];
@@ -155,7 +156,8 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
 
   async function chooseStep(step: StepKey) {
     setActiveTab(labelFromStep(step));
-    if (!appointment || appointment.currentStep === step) return;
+    const normalizedCurrentStep = appointment?.currentStep === "ASSESSMENT" ? "ANAMNESIS" : appointment?.currentStep;
+    if (!appointment || normalizedCurrentStep === step) return;
     let reason: string | null = null;
     if (appointment.status === "FINISHED") {
       reason = window.prompt("Motivo da reabertura do atendimento:");
@@ -229,7 +231,7 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
         </div>
 
         <div className="overflow-x-auto pb-2">
-          <div className="relative flex min-w-[560px] items-start justify-between gap-3">
+          <div className="relative flex min-w-[460px] items-start justify-between gap-3">
             <div className="absolute left-4 right-4 top-2.5 h-1 rounded-full bg-slate-100" />
           {visibleFlowSteps.map((step) => {
             const status = stateFor(step.key);
@@ -277,49 +279,60 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
         )}
 
         {activeTab === "Anamnese" && (
-          <StepForm title="Anamnese" description="Dados clínicos iniciais. A Marie pode sugerir perguntas ou alertas, mas o registro é profissional.">
-            <form className="space-y-3" onSubmit={(event) => {
+          <StepForm title="Anamnese" description="Anamnese clínica, avaliação estética inicial e pontos de atenção para a Marie em uma única etapa.">
+            <form key={`anamnesis-${draftAction?.id ?? "base"}`} className="space-y-4" onSubmit={(event) => {
               event.preventDefault();
               const payload = formObject(new FormData(event.currentTarget));
               run(async () => {
-                await submit(anamnesis ? `/api/anamneses/${anamnesis.id}` : `/api/patients/${patient.id}/anamneses`, anamnesis ? "PUT" : "POST", payload, "Anamnese salva.");
-                if (appointment) await submit(`/api/appointments/${appointment.id}/step`, "PUT", { step: "ASSESSMENT" }, "Próxima etapa: avaliação.");
-                setActiveTab("Avaliação");
-              });
-            }}>
-              <TextField label="Queixa principal" name="chiefComplaint" value={anamnesis?.chiefComplaint} textarea required />
-              <TextField label="Objetivo do tratamento" name="treatmentGoal" value={anamnesis?.treatmentGoal} textarea />
-              <TextField label="Alergias" name="allergies" value={anamnesis?.allergies} textarea />
-              <TextField label="Medicamentos" name="medications" value={anamnesis?.medications} textarea />
-              <TextField label="Contraindicações" name="contraindications" value={anamnesis?.contraindications} textarea />
-              <TextField label="Observações" name="notes" value={anamnesis?.notes} textarea />
-              <Button size="sm" variant="primary" disabled={isPending}><Save className="h-4 w-4" />Salvar anamnese</Button>
-            </form>
-          </StepForm>
-        )}
-
-        {activeTab === "Avaliação" && (
-          <StepForm title="Avaliação" description="Revise achados técnicos. Alterações aqui marcam o plano de cuidado para revisão.">
-            <form className="space-y-3" onSubmit={(event) => {
-              event.preventDefault();
-              if (!appointment) return setMessage("Inicie um atendimento antes de salvar avaliação.");
-              run(async () => {
-                await submit(assessment ? `/api/assessments/${assessment.id}` : `/api/appointments/${appointment.id}/assessment`, assessment ? "PUT" : "POST", formObject(new FormData(event.currentTarget)), "Avaliação salva.");
+                await submit(anamnesis ? `/api/anamneses/${anamnesis.id}` : `/api/patients/${patient.id}/anamneses`, anamnesis ? "PUT" : "POST", pickFields(payload, anamnesisFields), "Anamnese salva.");
+                if (appointment) {
+                  await submit(assessment ? `/api/assessments/${assessment.id}` : `/api/appointments/${appointment.id}/assessment`, assessment ? "PUT" : "POST", pickFields(payload, assessmentFields), "Avaliação inicial salva.");
+                  await submit(`/api/appointments/${appointment.id}/step`, "PUT", { step: "CARE_PLAN" }, "Próxima etapa: plano de cuidado.");
+                }
                 setActiveTab("Plano de cuidado");
               });
             }}>
-              <label className="grid gap-1.5 text-sm font-medium">Área avaliada
-                <select name="assessedArea" defaultValue={assessment?.assessedArea ?? "FACIAL"} className="h-10 rounded-md border border-border bg-white px-3 text-sm">
-                  <option value="FACIAL">Facial</option>
-                  <option value="BODY">Corporal</option>
-                  <option value="BOTH">Facial e corporal</option>
-                </select>
-              </label>
-              <TextField label="Análise profissional" name="professionalAnalysis" value={assessment?.professionalAnalysis} textarea />
-              <TextField label="Condição da pele" name="skinCondition" value={assessment?.skinCondition} textarea />
-              <TextField label="Riscos percebidos" name="perceivedRisks" value={assessment?.perceivedRisks} textarea />
-              <TextField label="Observações técnicas" name="technicalNotes" value={assessment?.technicalNotes} textarea />
-              <Button size="sm" variant="primary" disabled={isPending}><Save className="h-4 w-4" />Salvar avaliação</Button>
+              <div className="rounded-[14px] border border-border bg-[#F8FAFD] p-3.5">
+                <p className="mb-3 text-sm font-semibold text-dark-accent">1. Dados principais</p>
+                <div className="space-y-3">
+                  <TextField label="Queixa principal" name="chiefComplaint" value={draftPayload.chiefComplaint ?? anamnesis?.chiefComplaint} textarea required />
+                  <TextField label="Objetivo do tratamento" name="treatmentGoal" value={draftPayload.treatmentGoal ?? anamnesis?.treatmentGoal} textarea />
+                </div>
+              </div>
+
+              <div className="rounded-[14px] border border-border bg-[#F8FAFD] p-3.5">
+                <p className="mb-3 text-sm font-semibold text-dark-accent">2. Histórico e segurança</p>
+                <div className="space-y-3">
+                  <TextField label="Alergias" name="allergies" value={draftPayload.allergies ?? anamnesis?.allergies} textarea />
+                  <TextField label="Medicamentos" name="medications" value={draftPayload.medications ?? anamnesis?.medications} textarea />
+                  <TextField label="Doenças/condições pré-existentes" name="preExistingConditions" value={draftPayload.preExistingConditions ?? anamnesis?.preExistingConditions} textarea />
+                  <TextField label="Procedimentos anteriores" name="previousProcedures" value={draftPayload.previousProcedures ?? anamnesis?.previousProcedures} textarea />
+                  <TextField label="Contraindicações" name="contraindications" value={draftPayload.contraindications ?? anamnesis?.contraindications} textarea />
+                  <TextField label="Hábitos" name="habits" value={draftPayload.habits ?? anamnesis?.habits} textarea />
+                  <TextField label="Observações" name="notes" value={draftPayload.notes ?? anamnesis?.notes} textarea />
+                </div>
+              </div>
+
+              <div className="rounded-[14px] border border-border bg-[#F8FAFD] p-3.5">
+                <p className="mb-3 text-sm font-semibold text-dark-accent">3. Avaliação estética inicial</p>
+                <div className="space-y-3">
+                  <label className="grid gap-1.5 text-sm font-medium">Área avaliada
+                    <select name="assessedArea" defaultValue={draftPayload.assessedArea ?? assessment?.assessedArea ?? "FACIAL"} className="h-10 rounded-md border border-border bg-white px-3 text-sm">
+                      <option value="FACIAL">Facial</option>
+                      <option value="BODY">Corporal</option>
+                      <option value="BOTH">Facial e corporal</option>
+                    </select>
+                  </label>
+                  <TextField label="Tipo de pele" name="skinType" value={draftPayload.skinType ?? anamnesis?.skinType} textarea />
+                  <TextField label="Sensibilidade" name="skinSensitivity" value={draftPayload.skinSensitivity ?? anamnesis?.skinSensitivity} textarea />
+                  <TextField label="Condição da pele" name="skinCondition" value={draftPayload.skinCondition ?? assessment?.skinCondition} textarea />
+                  <TextField label="Condição corporal" name="bodyCondition" value={draftPayload.bodyCondition ?? assessment?.bodyCondition} textarea />
+                  <TextField label="Análise profissional" name="professionalAnalysis" value={draftPayload.professionalAnalysis ?? assessment?.professionalAnalysis} textarea />
+                  <TextField label="Riscos percebidos" name="perceivedRisks" value={draftPayload.perceivedRisks ?? assessment?.perceivedRisks} textarea />
+                  <TextField label="Observações técnicas" name="technicalNotes" value={draftPayload.technicalNotes ?? assessment?.technicalNotes} textarea />
+                </div>
+              </div>
+              <Button size="sm" variant="primary" disabled={isPending}><Save className="h-4 w-4" />Salvar anamnese</Button>
             </form>
           </StepForm>
         )}
@@ -350,7 +363,7 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
 
         {activeTab === "Execução" && (
           <StepForm title="Execução" description="Registre procedimento, produtos, parâmetros e intercorrências. Alterações aqui podem exigir revisão da evolução.">
-            <form className="space-y-3" onSubmit={(event) => {
+            <form key={`execution-${draftAction?.id ?? "base"}`} className="space-y-3" onSubmit={(event) => {
               event.preventDefault();
               if (!appointment) return;
               run(async () => {
@@ -358,13 +371,13 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
                 setActiveTab("Evolução");
               });
             }}>
-              <TextField label="Procedimento realizado" name="procedurePerformed" value={execution?.procedurePerformed} textarea required />
-              <TextField label="Produtos utilizados" name="productsUsed" value={execution?.productsUsed} textarea />
-              <TextField label="Parâmetros de equipamentos" name="equipmentParameters" value={execution?.equipmentParameters} textarea />
-              <TextField label="Duração" name="duration" value={execution?.duration} />
-              <TextField label="Observações profissionais" name="professionalNotes" value={execution?.professionalNotes} textarea />
-              <TextField label="Intercorrências" name="incidents" value={execution?.incidents} textarea />
-              <TextField label="Cuidados pós-procedimento entregues" name="postCareGiven" value={execution?.postCareGiven} textarea />
+              <TextField label="Procedimento realizado" name="procedurePerformed" value={draftPayload.procedurePerformed ?? execution?.procedurePerformed} textarea required />
+              <TextField label="Produtos utilizados" name="productsUsed" value={draftPayload.productsUsed ?? execution?.productsUsed} textarea />
+              <TextField label="Parâmetros de equipamentos" name="equipmentParameters" value={draftPayload.equipmentParameters ?? execution?.equipmentParameters} textarea />
+              <TextField label="Duração" name="duration" value={draftPayload.duration ?? execution?.duration} />
+              <TextField label="Observações profissionais" name="professionalNotes" value={draftPayload.professionalNotes ?? execution?.professionalNotes} textarea />
+              <TextField label="Intercorrências" name="incidents" value={draftPayload.incidents ?? execution?.incidents} textarea />
+              <TextField label="Cuidados pós-procedimento entregues" name="postCareGiven" value={draftPayload.postCareGiven ?? execution?.postCareGiven} textarea />
               <Button size="sm" variant="primary" disabled={isPending}><Save className="h-4 w-4" />Salvar execução</Button>
             </form>
           </StepForm>
@@ -372,7 +385,7 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
 
         {activeTab === "Evolução" && (
           <StepForm title="Evolução" description="Registre resposta clínica, ajustes e próximos passos.">
-            <form className="space-y-3" onSubmit={(event) => {
+            <form key={`evolution-${draftAction?.id ?? "base"}`} className="space-y-3" onSubmit={(event) => {
               event.preventDefault();
               run(async () => submit(`/api/patients/${patient.id}/evolutions`, "POST", { ...formObject(new FormData(event.currentTarget)), appointmentId: appointment?.id ?? null }, "Evolução registrada."));
             }}>
@@ -381,7 +394,7 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
               <TextField label="Observações clínicas" name="professionalNotes" value={draftPayload.professionalNotes} textarea />
               <TextField label="Ajustes realizados" name="adjustmentsMade" value={draftPayload.adjustmentsMade} textarea />
               <TextField label="Próximos passos" name="nextSteps" value={draftPayload.nextSteps} textarea />
-              <TextField label="Data de retorno" name="returnDate" type="date" />
+              <TextField label="Data de retorno" name="returnDate" value={draftPayload.returnDate} type="date" />
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" variant="primary" disabled={isPending}><Save className="h-4 w-4" />Salvar evolução</Button>
                 {appointment?.status !== "FINISHED" && <Button type="button" size="sm" variant="success" onClick={() => run(async () => finishAppointment())}>Finalizar atendimento</Button>}
@@ -396,6 +409,7 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
         {activeTab === "Finalização" && (
           <div className="space-y-4">
             <SectionHeader title="Finalização" description="Ao finalizar, escolha entre reabrir, novo atendimento ou acompanhamento do mesmo tratamento." />
+            {draftPayload.finalSummary && <Field label="Resumo final sugerido pela Marie" value={draftPayload.finalSummary} />}
             <Field label="Status" value={labelFor(appointment?.status)} />
             <Field label="Pendências" value={pendings.length ? pendings.join("\n") : "Nenhuma pendência crítica identificada."} />
             {appointment?.status !== "FINISHED" && <Button variant="success" onClick={() => run(async () => finishAppointment(true))}>Finalizar atendimento</Button>}
@@ -426,38 +440,40 @@ function StepForm({ title, description, children }: { title: string; description
 
 function CarePlanSection(props: any) {
   const { appointment, patient, suggestion, protocol, marieSuggestions, draftPayload, editingSuggestion, setEditingSuggestion, showSuggestionForm, setShowSuggestionForm, editingProtocol, setEditingProtocol, isPending, run, submit, duplicateProtocol } = props;
+  const hasDraftPlan = Boolean(draftPayload.title || draftPayload.objective || draftPayload.indication || draftPayload.postProcedureCare);
   return (
     <div className="space-y-4">
       <div className="rounded-[14px] border border-border bg-white p-4 shadow-soft">
         <div className="mb-3 flex items-center justify-between gap-2">
           <div>
-            <p className="text-sm font-semibold text-dark-accent">1. Sugestões</p>
-            <p className="text-xs text-muted">Marie e sugestões manuais ficam no contexto do plano.</p>
+            <p className="text-sm font-semibold text-dark-accent">Plano/protocolo em construção</p>
+            <p className="text-xs text-muted">A Marie pode preencher este rascunho. O profissional revisa, edita e salva.</p>
           </div>
-          <Button size="sm" onClick={() => setShowSuggestionForm(true)}><Plus className="h-4 w-4" />Criar sugestão</Button>
+          {protocol && <Button size="sm" onClick={() => setEditingProtocol((value: boolean) => !value)}><Pencil className="h-4 w-4" />Editar</Button>}
         </div>
-        {showSuggestionForm && <SuggestionForm draftPayload={draftPayload} editingSuggestion={editingSuggestion ?? suggestion} appointment={appointment} isAi={!!draftPayload.title} disabled={isPending} onSubmit={(payload: Record<string, unknown>) => run(async () => {
-          await submit(editingSuggestion ? `/api/suggestions/${editingSuggestion.id}` : `/api/patients/${patient.id}/suggestions`, editingSuggestion ? "PUT" : "POST", payload, "Sugestão salva no plano de cuidado.");
-          setEditingSuggestion(null);
-          setShowSuggestionForm(false);
-        })} />}
-        <div className="mt-3 space-y-2">
-          {marieSuggestions.map((item: any) => <Field key={item.id} label={`Marie · ${labelFor(item.step)}`} value={`${item.title}\n${item.content ?? ""}`} />)}
-          {patient.suggestions?.map((item: any) => (
-            <div key={item.id} className="rounded-[14px] border border-border bg-[#F8FAFD] p-3">
-              <div className="flex items-center justify-between gap-2"><p className="text-sm font-semibold">{item.title}</p><Badge tone={item.status === "REJECTED" ? "red" : item.status === "APPROVED" ? "green" : "amber"}>{labelFor(item.status)}</Badge></div>
-              <p className="mt-1 text-sm text-muted">{item.objective}</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <Button size="sm" onClick={() => { setEditingSuggestion(item); setShowSuggestionForm(true); }}>Editar</Button>
-                <Button size="sm" variant="ghost" onClick={() => run(async () => submit(`/api/suggestions/${item.id}`, "PUT", { status: "REJECTED" }, "Sugestão rejeitada."))}>Rejeitar</Button>
-              </div>
+        {(editingProtocol || !protocol || hasDraftPlan) ? (
+          <ProtocolForm draftPayload={draftPayload} protocol={protocol} suggestion={suggestion} appointment={appointment} patient={patient} disabled={isPending} onSubmit={(payload: Record<string, unknown>) => run(async () => {
+            await submit(protocol ? `/api/protocols/${protocol.id}` : `/api/patients/${patient.id}/protocols`, protocol ? "PUT" : "POST", payload, "Plano de cuidado salvo.");
+            setEditingProtocol(false);
+          })} />
+        ) : (
+          <div className="space-y-3">
+            <Field label="Status" value={labelFor(protocol.status)} />
+            <Field label="Título" value={protocol.title} />
+            <Field label="Objetivo" value={protocol.objective} />
+            <Field label="Indicação" value={protocol.indication} />
+            <Field label="Contraindicações" value={protocol.contraindications} />
+            <Field label="Cuidados pós-procedimento" value={protocol.postProcedureCare} />
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="primary" onClick={() => run(async () => submit(`/api/protocols/${protocol.id}`, "PUT", { status: "APPLIED" }, "Protocolo aplicado. Próxima etapa: execução."))}>Aplicar protocolo</Button>
+              <Button size="sm" variant="ghost" onClick={() => run(async () => duplicateProtocol(protocol))}><Copy className="h-4 w-4" />Duplicar</Button>
             </div>
-          ))}
-        </div>
+          </div>
+        )}
       </div>
 
       <div className="rounded-[14px] border border-border bg-white p-4 shadow-soft">
-        <p className="text-sm font-semibold text-dark-accent">2. Revisão profissional</p>
+        <p className="text-sm font-semibold text-dark-accent">Revisão profissional</p>
         {suggestion ? (
           <form className="mt-3 space-y-3" onSubmit={(event) => {
             event.preventDefault();
@@ -480,27 +496,29 @@ function CarePlanSection(props: any) {
       <div className="rounded-[14px] border border-border bg-white p-4 shadow-soft">
         <div className="mb-3 flex items-center justify-between gap-2">
           <div>
-            <p className="text-sm font-semibold text-dark-accent">3. Protocolo aprovado</p>
-            <p className="text-xs text-muted">Plano oficial validado e pronto para aplicação.</p>
+            <p className="text-sm font-semibold text-dark-accent">Sugestões internas</p>
+            <p className="text-xs text-muted">Use apenas quando precisar registrar uma sugestão manual ou manter histórico técnico.</p>
           </div>
-          {protocol && <Button size="sm" onClick={() => setEditingProtocol((value: boolean) => !value)}><Pencil className="h-4 w-4" />Editar</Button>}
+          <Button size="sm" onClick={() => setShowSuggestionForm(true)}><Plus className="h-4 w-4" />Criar sugestão</Button>
         </div>
-        {(editingProtocol || !protocol) ? (
-          <ProtocolForm protocol={protocol} suggestion={suggestion} appointment={appointment} patient={patient} disabled={isPending} onSubmit={(payload: Record<string, unknown>) => run(async () => {
-            await submit(protocol ? `/api/protocols/${protocol.id}` : `/api/patients/${patient.id}/protocols`, protocol ? "PUT" : "POST", payload, "Protocolo salvo.");
-            setEditingProtocol(false);
-          })} />
-        ) : (
-          <div className="space-y-3">
-            <Field label="Status" value={labelFor(protocol.status)} />
-            <Field label="Título" value={protocol.title} />
-            <Field label="Cuidados pós-procedimento" value={protocol.postProcedureCare} />
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="primary" onClick={() => run(async () => submit(`/api/protocols/${protocol.id}`, "PUT", { status: "APPLIED" }, "Protocolo aplicado. Próxima etapa: execução."))}>Aplicar protocolo</Button>
-              <Button size="sm" variant="ghost" onClick={() => run(async () => duplicateProtocol(protocol))}><Copy className="h-4 w-4" />Duplicar</Button>
+        {showSuggestionForm && <SuggestionForm draftPayload={{}} editingSuggestion={editingSuggestion ?? suggestion} appointment={appointment} isAi={false} disabled={isPending} onSubmit={(payload: Record<string, unknown>) => run(async () => {
+          await submit(editingSuggestion ? `/api/suggestions/${editingSuggestion.id}` : `/api/patients/${patient.id}/suggestions`, editingSuggestion ? "PUT" : "POST", payload, "Sugestão salva no histórico do plano.");
+          setEditingSuggestion(null);
+          setShowSuggestionForm(false);
+        })} />}
+        <div className="mt-3 space-y-2">
+          {marieSuggestions.map((item: any) => <Field key={item.id} label={`Marie · ${labelFor(item.step)}`} value={`${item.title}\n${item.content ?? ""}`} />)}
+          {patient.suggestions?.map((item: any) => (
+            <div key={item.id} className="rounded-[14px] border border-border bg-[#F8FAFD] p-3">
+              <div className="flex items-center justify-between gap-2"><p className="text-sm font-semibold">{item.title}</p><Badge tone={item.status === "REJECTED" ? "red" : item.status === "APPROVED" ? "green" : "amber"}>{labelFor(item.status)}</Badge></div>
+              <p className="mt-1 text-sm text-muted">{item.objective}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Button size="sm" onClick={() => { setEditingSuggestion(item); setShowSuggestionForm(true); }}>Editar</Button>
+                <Button size="sm" variant="ghost" onClick={() => run(async () => submit(`/api/suggestions/${item.id}`, "PUT", { status: "REJECTED" }, "Sugestão rejeitada."))}>Rejeitar</Button>
+              </div>
             </div>
-          </div>
-        )}
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -531,20 +549,20 @@ function SuggestionForm({ draftPayload, editingSuggestion, appointment, isAi, di
   );
 }
 
-function ProtocolForm({ protocol, suggestion, appointment, patient, disabled, onSubmit }: any) {
+function ProtocolForm({ draftPayload = {}, protocol, suggestion, appointment, disabled, onSubmit }: any) {
   return (
-    <form className="space-y-3" onSubmit={(event) => {
+    <form key={`protocol-${draftPayload.title ?? protocol?.id ?? "base"}`} className="space-y-3" onSubmit={(event) => {
       event.preventDefault();
       onSubmit({ ...formObject(new FormData(event.currentTarget)), appointmentId: appointment?.id ?? null });
     }}>
-      <TextField label="Título" name="title" value={protocol?.title ?? suggestion?.title} required />
-      <TextField label="Objetivo" name="objective" value={protocol?.objective ?? suggestion?.objective} textarea />
-      <TextField label="Indicação" name="indication" value={protocol?.indication ?? suggestion?.suggestedTechniques} textarea />
-      <TextField label="Contraindicações" name="contraindications" value={protocol?.contraindications ?? suggestion?.contraindications} textarea />
-      <TextField label="Cuidados pós-procedimento" name="postProcedureCare" value={protocol?.postProcedureCare ?? suggestion?.warnings} textarea />
-      <input type="hidden" name="source" value={protocol?.source ?? "AI_ASSISTED"} />
-      <input type="hidden" name="status" value={protocol?.status ?? "APPROVED"} />
-      <Button size="sm" variant="primary" disabled={disabled}><Save className="h-4 w-4" />Salvar protocolo</Button>
+      <TextField label="Título" name="title" value={draftPayload.title ?? protocol?.title ?? suggestion?.title} required />
+      <TextField label="Objetivo" name="objective" value={draftPayload.objective ?? protocol?.objective ?? suggestion?.objective} textarea />
+      <TextField label="Indicação" name="indication" value={draftPayload.indication ?? protocol?.indication ?? suggestion?.suggestedTechniques} textarea />
+      <TextField label="Contraindicações" name="contraindications" value={draftPayload.contraindications ?? protocol?.contraindications ?? suggestion?.contraindications} textarea />
+      <TextField label="Cuidados pós-procedimento" name="postProcedureCare" value={draftPayload.postProcedureCare ?? protocol?.postProcedureCare ?? suggestion?.warnings} textarea />
+      <input type="hidden" name="source" value={draftPayload.source ?? protocol?.source ?? "AI_ASSISTED"} />
+      <input type="hidden" name="status" value={draftPayload.status ?? protocol?.status ?? "DRAFT"} />
+      <Button size="sm" variant="primary" disabled={disabled}><Save className="h-4 w-4" />Salvar plano</Button>
     </form>
   );
 }

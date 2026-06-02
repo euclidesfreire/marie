@@ -72,7 +72,8 @@ export function collectContextText(context: MarieContextLike) {
 }
 
 export function getCurrentStep(context: MarieContextLike) {
-  return context.appointment?.currentStep ?? "PREPARATION";
+  const step = context.appointment?.currentStep ?? "PREPARATION";
+  return step === "ASSESSMENT" ? "ANAMNESIS" : step;
 }
 
 export function getMarieArea(context: MarieContextLike): MarieArea {

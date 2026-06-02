@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { labelFor } from "@/lib/labels";
+import { isMarieDraftAction } from "@/lib/ai/marie-action-drafts";
 
 type ChatMessage = {
   id: string;
@@ -23,23 +24,23 @@ const marieStepMocks: Record<string, { quickActions: string[]; defaultMessage: s
     defaultMessage: "Posso organizar o contexto inicial e preparar o atendimento."
   },
   ANAMNESIS: {
-    quickActions: ["Revisar anamnese e apontar lacunas", "Identificar contraindicações", "Sugerir perguntas complementares", "Resumir queixa e objetivo"],
-    defaultMessage: "Posso revisar a anamnese, sugerir perguntas complementares ou identificar possíveis contraindicações."
+    quickActions: ["Revisar anamnese", "Identificar contraindicações", "Apoiar avaliação inicial", "Sugerir pontos de atenção", "Sugerir perguntas complementares", "Resumir histórico"],
+    defaultMessage: "Posso revisar a anamnese, apoiar a avaliação estética inicial e apontar riscos para o plano."
   },
   ASSESSMENT: {
-    quickActions: ["Apoiar avaliação facial", "Apoiar avaliação corporal", "Comparar avaliação com anamnese", "Sugerir pontos técnicos"],
-    defaultMessage: "Posso apoiar a avaliação profissional com pontos de atenção e revisão de riscos."
+    quickActions: ["Revisar anamnese", "Apoiar avaliação inicial", "Comparar dados", "Revisar riscos"],
+    defaultMessage: "A avaliação agora fica integrada à Anamnese, mantendo área avaliada e pontos técnicos."
   },
   CARE_PLAN: {
-    quickActions: ["Gerar protocolo com base nos dados", "Gerar protocolo facial", "Gerar protocolo corporal", "Revisar contraindicações do protocolo", "Gerar cuidados pós e home care"],
+    quickActions: ["Sugerir plano de cuidado", "Ajustar plano", "Revisar contraindicações", "Gerar cuidados pós"],
     defaultMessage: "Posso sugerir um plano de cuidado para revisão profissional."
   },
   EXECUTION: {
-    quickActions: ["Sugerir registro da execução", "Gerar orientação pós-procedimento", "Registrar intercorrência", "Preparar evolução da sessão"],
+    quickActions: ["Registrar execução", "Revisar parâmetros", "Gerar orientação", "Registrar intercorrência"],
     defaultMessage: "Posso ajudar a registrar o que foi executado e as orientações dadas ao paciente."
   },
   EVOLUTION: {
-    quickActions: ["Gerar evolução da sessão", "Comparar com evolução anterior", "Sugerir próximos passos", "Preparar retorno"],
+    quickActions: ["Criar evolução", "Resumir evolução", "Sugerir próximos passos", "Preparar retorno"],
     defaultMessage: "Posso ajudar a escrever a evolução clínica e sugerir próximos passos."
   },
   COMPLETION: {
@@ -86,11 +87,14 @@ function previewRows(action: MarieAction) {
   return rows.filter(([, value]) => typeof value === "string" && value.trim().length > 0) as [string, string][];
 }
 
-function primaryActionLabel(action: MarieAction) {
-  if (action.type === "CREATE_PROTOCOL_SUGGESTION") return "Salvar como sugestão";
-  if (action.type === "CREATE_EVOLUTION") return "Salvar evolução";
-  if (action.type === "CREATE_CLINICAL_NOTE") return "Salvar anotação";
-  if (action.type === "UPDATE_APPOINTMENT_NOTES") return "Aplicar como sugestão";
+function primaryActionLabel(action: MarieAction, currentStep: string) {
+  if (isMarieDraftAction(action)) {
+    if (currentStep === "CARE_PLAN" || action.type === "CREATE_PROTOCOL_SUGGESTION") return "Aplicar no plano";
+    if (currentStep === "EXECUTION") return "Aplicar na execução";
+    if (currentStep === "EVOLUTION" || action.type === "CREATE_EVOLUTION") return "Aplicar na evolução";
+    if (currentStep === "COMPLETION") return "Aplicar na finalização";
+    return "Aplicar na anamnese";
+  }
   return "Aplicar como sugestão";
 }
 
@@ -114,7 +118,7 @@ export function MarieChat({ data, onApplied, onEditAction }: { data: any; onAppl
     protocols: data.patient.protocols ?? [],
     evolutions: data.patient.evolutions ?? []
   }), [data]);
-  const currentStep = data.currentAppointment?.currentStep ?? "ANAMNESIS";
+  const currentStep = data.currentAppointment?.currentStep === "ASSESSMENT" ? "ANAMNESIS" : (data.currentAppointment?.currentStep ?? "ANAMNESIS");
   const stepMock = marieStepMocks[currentStep] ?? marieStepMocks.ANAMNESIS;
   const quickCommands = stepMock.quickActions;
 
@@ -145,6 +149,13 @@ export function MarieChat({ data, onApplied, onEditAction }: { data: any; onAppl
   }
 
   async function applyAction(action: MarieAction) {
+    if (isMarieDraftAction(action)) {
+      setActionStatus(action.id, "applied");
+      onEditAction(action);
+      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "SYSTEM", content: "Rascunho aplicado no formulário da etapa. Revise, edite e salve quando estiver pronto." }]);
+      return;
+    }
+
     startTransition(async () => {
       const response = await fetch("/api/marie/actions/execute", {
         method: "POST",
@@ -232,11 +243,11 @@ export function MarieChat({ data, onApplied, onEditAction }: { data: any; onAppl
                     </div>
                   ))}
                 </div>
-                <p className="mt-2 text-xs text-muted">Essa ação só será salva após confirmação profissional.</p>
+                <p className="mt-2 text-xs text-muted">Marie propõe. O formulário recebe o rascunho. O profissional revisa antes de salvar.</p>
                 <div className="mt-3 flex flex-wrap gap-1.5">
-                  <Button size="sm" variant="primary" onClick={() => applyAction(action)} disabled={isPending || action.localStatus !== "pending"}><Check className="h-4 w-4" />{primaryActionLabel(action)}</Button>
-                  <Button size="sm" onClick={() => onEditAction(action)} disabled={action.localStatus !== "pending"}><Pencil className="h-4 w-4" />Editar</Button>
-                  <Button size="sm" variant="ghost" onClick={() => setActionStatus(action.id, "canceled")} disabled={action.localStatus !== "pending"}><X className="h-4 w-4" />Cancelar</Button>
+                  <Button size="sm" variant="primary" onClick={() => applyAction(action)} disabled={isPending || action.localStatus !== "pending"}><Check className="h-4 w-4" />{primaryActionLabel(action, currentStep)}</Button>
+                  <Button size="sm" onClick={() => onEditAction(action)} disabled={action.localStatus !== "pending"}><Pencil className="h-4 w-4" />Editar antes</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setActionStatus(action.id, "canceled")} disabled={action.localStatus !== "pending"}><X className="h-4 w-4" />Rejeitar</Button>
                 </div>
               </div>
             ))}

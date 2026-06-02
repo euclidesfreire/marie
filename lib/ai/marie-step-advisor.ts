@@ -85,8 +85,8 @@ function buildProtocolAction(scenario: MarieScenario, context: MarieContextPaylo
   const risks = detectMarieRisks(context, scenario.recommendedProtocolKey);
   return action(
     "CREATE_PROTOCOL_SUGGESTION",
-    "Criar sugestão de protocolo",
-    `Preparar ${currentProtocolName(scenario).toLowerCase()} para revisão profissional.`,
+    "Preencher plano de cuidado",
+    `Preparar ${currentProtocolName(scenario).toLowerCase()} como rascunho editável do plano.`,
     buildProtocolSuggestionPayload(scenario.recommendedProtocolKey, risks)
   );
 }
@@ -146,9 +146,15 @@ function anamnesisResponse(scenario: MarieScenario, context: MarieContextPayload
   const actions: MarieAction[] = [buildContraindicationAction(scenario, context)];
   const asksProtocol = commandAsksForProtocol(context.professionalCommand);
   if (asksProtocol) actions.push(buildProtocolAction(scenario, context));
+  const areaGuidance =
+    scenario.area === "BODY"
+      ? "Para avaliação corporal, sugiro observar gordura localizada, retenção hídrica, flacidez, fibro edema geloide, medidas e contraindicações vasculares, inflamatórias ou para eletroterapia."
+      : scenario.area === "BOTH"
+        ? "Como a área envolve facial e corporal, sugiro separar pontos faciais como sensibilidade, barreira cutânea, manchas e uso de ácidos; e pontos corporais como medidas, flacidez, retenção hídrica e contraindicações vasculares."
+        : "Para avaliação facial, sugiro observar sensibilidade, barreira cutânea, textura, manchas, luminosidade, firmeza, uso recente de ácidos/retinoides e fotoproteção.";
 
   return {
-    message: `Na anamnese, identifiquei ${buildReason(scenario, context)}. ${scenario.missingFields.length ? `Sugiro complementar ${sentenceList(scenario.missingFields)} antes de validar o plano.` : "A anamnese traz base suficiente para a próxima etapa, desde que o profissional confirme presencialmente."} ${asksProtocol ? "Preparei uma sugestão preliminar, mas ela deve ser revisada com cautela." : "Nesta etapa, priorizo lacunas, perguntas complementares e contraindicações antes de montar protocolo completo."}`,
+    message: `Na anamnese e avaliação inicial, identifiquei ${buildReason(scenario, context)}. ${areaGuidance} ${scenario.missingFields.length ? `Sugiro complementar ${sentenceList(scenario.missingFields)} antes de validar o plano.` : "A etapa traz base suficiente para o plano, desde que o profissional confirme presencialmente."} ${asksProtocol ? "Preparei uma sugestão preliminar, mas ela deve ser revisada com cautela." : "Nesta etapa, priorizo lacunas, perguntas complementares e contraindicações antes de montar protocolo completo."}`,
     warnings: scenario.shouldWarnProfessional ? [...scenario.detectedRisks, principle] : [principle],
     actions
   };
@@ -191,7 +197,13 @@ function carePlanResponse(scenario: MarieScenario, context: MarieContextPayload)
 function executionResponse(scenario: MarieScenario, context: MarieContextPayload): MarieResponse {
   const actions: MarieAction[] = [
     action("UPDATE_APPOINTMENT_NOTES", "Sugerir registro da execução", "Organizar procedimento, parâmetros e observações sem inventar valores técnicos.", {
-      conduct: `Execução assistida: registrar técnica aplicada, região tratada, produtos utilizados, parâmetros do equipamento conforme protocolo interno, duração aproximada, tolerância do cliente, intercorrências e cuidados entregues. Referência clínica: ${currentProtocolName(scenario)}.`
+      procedurePerformed: `Registrar técnica aplicada e região tratada com referência ao plano: ${currentProtocolName(scenario)}.`,
+      productsUsed: "Informar produtos utilizados conforme protocolo interno e tolerância do cliente.",
+      equipmentParameters: "Registrar parâmetros do equipamento conforme protocolo interno e orientação do fabricante, sem valores inventados pela Marie.",
+      duration: "Registrar duração aproximada conforme execução real.",
+      professionalNotes: `Execução assistida: registrar tolerância do cliente, resposta observada, intercorrências e ajustes realizados. ${scenario.shouldWarnProfessional ? `Atenção a: ${sentenceList(scenario.detectedRisks)}.` : ""}`,
+      incidents: "Registrar intercorrências somente se observadas ou relatadas.",
+      postCareGiven: "Registrar cuidados entregues ao final e reforçar que a decisão é profissional."
     }),
     buildGuidanceAction(scenario, context)
   ];
