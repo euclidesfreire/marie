@@ -1,7 +1,7 @@
 import { getProtocolByKey, type MarieProtocolKey } from "@/lib/ai/marie-knowledge-base";
 import {
+  findCatalogProcedure,
   procedureMatchesContext,
-  proceduresForCategory,
   type MarieProcedure
 } from "@/lib/ai/marie-procedure-catalog";
 import type { MarieRiskAnalysis } from "@/lib/ai/marie-risk-engine";
@@ -41,65 +41,12 @@ function unique(items: string[]) {
   return [...new Set(items.filter(Boolean))];
 }
 
-function subtypePlan(subtype: MarieCaseSubtype) {
-  const plans: Partial<Record<MarieCaseSubtype, Pick<MarieProcedurePlan, "recommendedProcedures" | "optionalProcedures" | "avoidedProcedures">>> = {
-    comedonal_acne: {
-      recommendedProcedures: ["Higienização inicial", "Limpeza de pele com extração, se indicada", "Peeling ultrassônico", "Alta Frequência", "Fotobiomodulação", "Finalização com hidratação leve e fotoproteção"],
-      optionalProcedures: ["Peeling químico adequado, se houver tolerância", "Microcorrentes", "Terapia de contraste"],
-      avoidedProcedures: ["Procedimentos agressivos enquanto sensibilidade e uso de ativos não estiverem confirmados"]
-    },
-    inflammatory_acne: {
-      recommendedProcedures: ["Avaliar atividade inflamatória e integridade da pele", "Higienização suave", "Fotobiomodulação", "Alta Frequência somente se indicada", "Finalização calmante e fotoproteção"],
-      optionalProcedures: ["Microcorrentes para apoio ao controle inflamatório", "Peeling químico somente após validação de tolerância"],
-      avoidedProcedures: ["Extração intensa em lesões inflamadas", "Procedimentos abrasivos sobre lesões ativas"]
-    },
-    oily_skin: {
-      recommendedProcedures: ["Higienização equilibrada", "Desincrust, se indicado", "Peeling ultrassônico", "Hidratação leve", "Fotoproteção"],
-      optionalProcedures: ["Ionização", "Alta Frequência", "Fotobiomodulação"],
-      avoidedProcedures: ["Ressecamento excessivo e procedimentos irritativos sem necessidade"]
-    },
-    sensitive_acne: {
-      recommendedProcedures: ["Avaliação profissional conservadora", "Orientação de barreira cutânea", "Higienização suave", "Fotobiomodulação calmante, se compatível", "Fotoproteção"],
-      optionalProcedures: ["Somente recursos suaves após validação profissional"],
-      avoidedProcedures: ["Peeling químico", "Peeling de diamante", "Extração agressiva", "Jato de plasma", "Eletrocautério"]
-    },
-    melasma: {
-      recommendedProcedures: ["Revisar fotoproteção e exposição solar", "Avaliar fototipo e padrão da hipercromia", "Fototerapia conservadora", "Ativos clareadores compatíveis", "Acompanhamento evolutivo"],
-      optionalProcedures: ["Peeling químico clareador após validação", "Eletroporação com ativos adequados"],
-      avoidedProcedures: ["Procedimentos agressivos com exposição solar intensa ou fotoproteção irregular"]
-    },
-    dehydrated_aging_skin: {
-      recommendedProcedures: ["Higienização suave", "Revitalização e hidratação", "Eletroporação", "LED Terapia", "Fotoproteção"],
-      optionalProcedures: ["Microcorrentes", "Tecarterapia", "Radiofrequência após avaliação"],
-      avoidedProcedures: ["Peelings intensos antes de recuperar hidratação e barreira cutânea"]
-    },
-    localized_abdominal_fat: {
-      recommendedProcedures: ["Avaliação da região e registro de medidas", "Endermoterapia ou massagem modeladora", "Ultrassom cavitacional, se indicado", "Radiofrequência ou criofrequência conforme objetivo", "Orientação de hidratação e acompanhamento"],
-      optionalProcedures: ["Ondas de choque", "Eletrolipólise", "Criolipólise após avaliação específica"],
-      avoidedProcedures: ["Promessa de redução de medidas", "Equipamentos sem validação de contraindicações"]
-    },
-    localized_fat_with_laxity: {
-      recommendedProcedures: ["Registro de medidas e grau de flacidez", "Endermoterapia", "Radiofrequência ou criofrequência conforme segurança", "Massagem modeladora", "Acompanhamento evolutivo"],
-      optionalProcedures: ["Ultrassom cavitacional", "Ondas de choque", "Correntes excitomotoras"],
-      avoidedProcedures: ["Combinações intensivas sem testar tolerância e contraindicações"]
-    },
-    cellulite_edematous: {
-      recommendedProcedures: ["Avaliar retenção hídrica e hábitos", "Drenagem linfática", "Endermoterapia conforme tolerância", "Orientação de hidratação", "Registro evolutivo"],
-      optionalProcedures: ["Ondas de choque", "Tecarterapia", "Criofrequência conforme avaliação"],
-      avoidedProcedures: ["Abordagem agressiva em área dolorosa, inflamada ou com contraindicação vascular"]
-    },
-    cellulite_fibrotic: {
-      recommendedProcedures: ["Registrar grau e áreas fibróticas", "Endermoterapia conforme tolerância", "Ondas de choque", "Tecarterapia", "Acompanhamento da resposta"],
-      optionalProcedures: ["Criofrequência", "Ultrassom cavitacional", "Sonoforese"],
-      avoidedProcedures: ["Pressão excessiva ou equipamentos sem avaliação vascular"]
-    },
-    relaxation_and_fluid_retention: {
-      recommendedProcedures: ["Avaliar edema e contraindicações circulatórias", "Drenagem linfática", "Massagem relaxante", "Orientação de hidratação", "Registro da resposta"],
-      optionalProcedures: ["Detox corporal", "Spa dos pés", "Massagem com pedras quentes se compatível"],
-      avoidedProcedures: ["Calor, pressão intensa ou correntes quando houver contraindicação"]
-    }
-  };
-  return plans[subtype];
+function officialEquipmentsForIntent(intent: MarieProtocolKey) {
+  const equipmentRoles = new Set(["equipment", "electrotherapy", "laser_light", "thermal"]);
+  return getProtocolByKey(intent).techniques.filter((officialName) => {
+    const item = findCatalogProcedure(intent, officialName);
+    return item && equipmentRoles.has(item.role);
+  });
 }
 
 function contextForProcedureSelection(scenario: MarieScenario) {
@@ -120,17 +67,22 @@ function procedurePriority(item: MarieProcedure, scenario: MarieScenario) {
 }
 
 function catalogPlan(scenario: MarieScenario) {
+  type CatalogEntry = { officialName: string; item: MarieProcedure; reason?: string };
   const contextText = contextForProcedureSelection(scenario);
-  const catalog = proceduresForCategory(scenario.intent, scenario.area)
-    .sort((left, right) => procedurePriority(right, scenario) - procedurePriority(left, scenario));
-  const recommended: MarieProcedure[] = [];
-  const optional: MarieProcedure[] = [];
+  const base = getProtocolByKey(scenario.intent);
+  const catalog = base.techniques
+    .map((officialName) => ({ officialName, item: findCatalogProcedure(scenario.intent, officialName) }))
+    .filter((entry): entry is { officialName: string; item: MarieProcedure } => Boolean(entry.item))
+    .sort((left, right) => procedurePriority(right.item, scenario) - procedurePriority(left.item, scenario));
+  const recommended: CatalogEntry[] = [];
+  const optional: CatalogEntry[] = [];
   const avoided: string[] = [];
 
-  for (const item of catalog) {
+  for (const entry of catalog) {
+    const { item, officialName } = entry;
     const match = procedureMatchesContext(item, contextText, scenario.detectedRisks);
     if (match.avoidReasons.length) {
-      avoided.push(`${item.name} — evitar/revisar devido a ${match.avoidReasons.join(", ")}`);
+      avoided.push(`${officialName} — evitar/revisar devido a ${match.avoidReasons.join(", ")}`);
       continue;
     }
     if (
@@ -139,10 +91,10 @@ function catalogPlan(scenario: MarieScenario) {
       (scenario.safetyProfile === "HIGH_RISK" && item.intensity !== "low")
     ) {
       const reason = match.cautionReasons.length ? ` — requer cautela por ${match.cautionReasons.join(", ")}` : " — somente após validação profissional específica";
-      optional.push({ ...item, name: `${item.name}${reason}` });
+      optional.push({ ...entry, reason });
       continue;
     }
-    recommended.push(item);
+    recommended.push(entry);
   }
 
   const equipmentRoles = new Set(["equipment", "electrotherapy", "laser_light", "thermal"]);
@@ -150,7 +102,7 @@ function catalogPlan(scenario: MarieScenario) {
     recommended: recommended.slice(0, 6),
     optional: [...recommended.slice(6), ...optional],
     avoided,
-    equipments: unique([...recommended, ...optional].filter((item) => equipmentRoles.has(item.role)).map((item) => item.name.split(" — ")[0]))
+    equipments: unique([...recommended, ...optional].filter((entry) => equipmentRoles.has(entry.item.role)).map((entry) => entry.officialName))
   };
 }
 
@@ -177,24 +129,12 @@ function safetyWideAvoidances(scenario: MarieScenario) {
 
 export function buildProcedurePlan(scenario: MarieScenario): MarieProcedurePlan {
   const base = getProtocolByKey(scenario.intent);
-  const subtype = subtypePlan(scenario.subtype);
   const catalog = catalogPlan(scenario);
-  const recommendedProcedures = unique([
-    ...(scenario.safetyProfile === "HIGH_RISK"
-      ? ["Revisar contraindicações e validar presencialmente antes de definir recursos"]
-      : []),
-    ...catalog.recommended.map((item) => item.name)
-  ]);
-  const optionalProcedures = unique([
-    ...catalog.optional.map((item) => item.name),
-    ...(catalog.recommended.length === 0 ? (subtype?.optionalProcedures ?? []) : [])
-  ]);
+  const recommendedProcedures = unique(catalog.recommended.map((entry) => entry.officialName));
+  const optionalProcedures = unique(catalog.optional.map((entry) => `${entry.officialName}${entry.reason ?? ""}`));
   const avoidedProcedures = unique([
     ...catalog.avoided,
     ...safetyWideAvoidances(scenario),
-    ...(scenario.safetyProfile === "HIGH_RISK" && catalog.avoided.length === 0
-      ? (subtype?.avoidedProcedures ?? ["Procedimentos intensivos até revisão profissional dos riscos"])
-      : []),
     ...(scenario.safetyProfile === "CAUTION" ? ["Procedimentos intensivos antes de revisar os fatores de cautela"] : [])
   ]);
   const alternatives = scenario.safetyProfile === "HIGH_RISK"
@@ -269,7 +209,7 @@ export function buildProtocolSuggestionPayload(intent: MarieProtocolKey, risks: 
     area: base.area,
     suggestedActives: base.actives,
     suggestedTechniques: numbered(base.techniques),
-    suggestedEquipments: base.equipments.join("; "),
+    suggestedEquipments: officialEquipmentsForIntent(intent).join("; "),
     contraindications: [...base.contraindications, ...risks.detectedRisks].join("; "),
     warnings: `${validationNotice} ${risks.cautions.join("; ")}`,
     status: "WAITING_REVIEW"

@@ -122,3 +122,26 @@ export function procedureMatchesContext(procedureItem: MarieProcedure, contextTe
 export function proceduresForCategory(category: MarieProtocolKey, area: MarieArea) {
   return marieProcedureCatalog.filter((item) => item.categories.includes(category) && (area === "BOTH" || item.area === area));
 }
+
+function procedureTokens(value: string) {
+  return normalizeMarieText(value)
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\b(facial|corporal|periocular|para|com|de|do|da|dos|das|em|e|casos|caso|especificos|especifico|protocolos|protocolo)\b/g, " ")
+    .replace(/[^a-z0-9ç\s]/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length > 2);
+}
+
+export function findCatalogProcedure(category: MarieProtocolKey, officialName: string) {
+  const expected = procedureTokens(officialName);
+  const match = proceduresForCategory(category, category.startsWith("facial_") ? "FACIAL" : "BODY")
+    .map((item) => {
+      const available = procedureTokens(item.name);
+      const matches = expected.filter((token) => available.some((candidate) => candidate.startsWith(token) || token.startsWith(candidate))).length;
+      const expectedCoverage = expected.length ? matches / expected.length : 0;
+      const availableCoverage = available.length ? matches / available.length : 0;
+      return { item, score: Math.max(expectedCoverage, availableCoverage) };
+    })
+    .sort((left, right) => right.score - left.score)[0];
+  return match && match.score >= 0.5 ? match.item : undefined;
+}

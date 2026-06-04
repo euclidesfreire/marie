@@ -27,6 +27,9 @@ export function detectMarieIntent(context: MarieContextLike): MarieProtocolKey {
   const summary = buildMarieContextSummary(context);
   const area = getMarieArea(context);
   const explicitArea = summary.explicitArea;
+  if (summary.primaryTreatmentConcern && summary.primaryTreatmentConcernCompatible) {
+    return summary.primaryTreatmentConcern;
+  }
   const allowedProtocols = Object.values(marieTreatmentKnowledge).filter((protocol) => {
     if (!explicitArea || explicitArea === "BOTH") return true;
     return protocol.area === explicitArea;

@@ -8,6 +8,7 @@ import type {
   ProtocolSuggestion
 } from "@prisma/client";
 import { analyzeMarieScenario, buildMarieResponseFromScenario } from "@/lib/ai/marie-step-advisor";
+import type { MarieProtocolKey } from "@/lib/ai/marie-knowledge-base";
 
 export type MarieActionType =
   | "CREATE_PROTOCOL_SUGGESTION"
@@ -41,6 +42,8 @@ export type MarieContextPayload = {
   suggestions?: ProtocolSuggestion[];
   protocols?: Protocol[];
   evolutions?: Evolution[];
+  primaryTreatmentConcern?: MarieProtocolKey | null;
+  mainTreatmentIndication?: MarieProtocolKey | null;
   professionalCommand: string;
 };
 

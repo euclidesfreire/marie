@@ -29,6 +29,14 @@ export type MarieTreatmentProtocol = {
   homeCare: string[];
 };
 
+export type TreatmentConcernOption = {
+  label: string;
+  value: MarieProtocolKey;
+  area: Exclude<MarieArea, "BOTH">;
+  description: string;
+  procedures: string[];
+};
+
 export const marieTreatmentKnowledge: Record<MarieProtocolKey, MarieTreatmentProtocol> = {
   facial_rejuvenescimento: {
     key: "facial_rejuvenescimento",
@@ -37,7 +45,7 @@ export const marieTreatmentKnowledge: Record<MarieProtocolKey, MarieTreatmentPro
     complaintKeywords: ["rugas", "envelhecimento", "rejuvenescimento", "linhas finas", "firmeza", "viço", "pele desvitalizada", "perda de viço", "pele ressecada"],
     objective: "Apoiar melhora gradual de textura, viço e firmeza, respeitando sensibilidade, fototipo e resposta cutânea.",
     actives: "Ativos antioxidantes, hidratantes e firmadores compatíveis com a avaliação profissional.",
-    techniques: ["Microcorrentes", "Radiofrequência", "Ultrassom microfocado", "Criofrequência", "Tecarterapia", "Peeling químico", "LED Terapia", "Peeling de diamante", "Peeling de cristal", "Eletroporação", "Luz intensa pulsada", "Eletrolift"],
+    techniques: ["Microcorrentes", "Radiofrequência", "Ultrassom microfocado (lifting e regeneração)", "Criofrequência", "Tecarterapia (bioestimulação profunda)", "Peeling químico", "LED Terapia", "Peeling de diamante", "Peeling de cristal", "Eletroporação", "Luz intensa pulsada", "Eletrolift"],
     equipments: ["Microcorrentes", "radiofrequência", "ultrassom microfocado", "criofrequência", "LED/LIP e eletroporação, conforme disponibilidade e avaliação."],
     contraindications: ["Sensibilidade intensa", "uso recente de ácidos", "isotretinoína/Roacutan", "gestação", "alterações cardíacas ou contraindicações para eletroterapia e recursos térmicos."],
     warnings: ["Evitar promessa de resultado e ajustar intensidade conforme barreira cutânea, fototipo e tolerância."],
@@ -50,7 +58,7 @@ export const marieTreatmentKnowledge: Record<MarieProtocolKey, MarieTreatmentPro
     complaintKeywords: ["acne", "espinha", "comedao", "comedões", "pustula", "pústula", "oleosidade", "cravos", "acne inflamatória", "manchas pós-inflamatórias"],
     objective: "Auxiliar no controle da oleosidade, higienização profunda, redução de inflamação aparente e melhora gradual da textura da pele.",
     actives: "Ativos calmantes, seborreguladores e hidratantes compatíveis com pele oleosa, conforme avaliação profissional.",
-    techniques: ["Higienização inicial", "Limpeza de pele com extração, se indicada", "Desincrust", "Peeling ultrassônico", "Alta Frequência", "Fotobiomodulação", "Peeling químico adequado", "Vacuoterapia", "Microcorrentes", "Terapia de contraste", "Ionização", "Peeling de diamante"],
+    techniques: ["Limpeza de pele com extração", "Desincrust", "Peeling ultrassônico", "Fotobiomodulação (via LIP/LAD)", "Peeling químico (ácido salicílico, mandélico.)", "Vacuoterapia", "Microcorrentes (controle de inflamação)", "Terapia de contraste", "Ionização", "Alta Frequência", "Peeling de diamante"],
     equipments: ["Peeling ultrassônico", "alta frequência", "LED/fotobiomodulação", "vacuoterapia, ionização e recursos compatíveis com a avaliação profissional."],
     contraindications: ["Alergias", "uso recente de Roacutan/isotretinoína", "uso de ácidos", "sensibilidade intensa", "gestação", "histórico de reações."],
     warnings: ["Evitar extrações intensas, peelings ou recursos abrasivos em pele sensibilizada ou com isotretinoína recente."],
@@ -102,7 +110,7 @@ export const marieTreatmentKnowledge: Record<MarieProtocolKey, MarieTreatmentPro
     complaintKeywords: ["sinal", "sinais", "verruga", "verrugas", "cicatriz", "cicatrizes", "cicatriz pós-acne", "nevo", "nevos", "siringoma"],
     objective: "Organizar avaliação criteriosa de lesões benignas, cicatrizes ou alterações locais, sempre com cautela e validação profissional.",
     actives: "Ativos reparadores e calmantes podem ser considerados conforme tolerância e indicação.",
-    techniques: ["Jato de Plasma", "Eletrocautério", "Remoção de lesões benignas como nevos, verrugas, siringoma e cicatrizes atróficas, quando permitido e validado."],
+    techniques: ["Remoção de lesões benignas, como nevos, verrugas, siringoma e cicatrizes atróficas.", "Jato de Plasma", "Eletrocautério"],
     equipments: ["Jato de plasma e eletrocautério somente em casos específicos e com validação profissional."],
     contraindications: ["Lesões suspeitas", "histórico de alteração dermatológica não avaliada", "cicatrização inadequada", "gestação ou contraindicações específicas."],
     warnings: ["Não realizar diagnóstico médico. Lesões suspeitas devem ser encaminhadas para avaliação médica antes de qualquer procedimento."],
@@ -128,7 +136,7 @@ export const marieTreatmentKnowledge: Record<MarieProtocolKey, MarieTreatmentPro
     complaintKeywords: ["gordura localizada", "gordura abdominal", "medidas", "adiposidade", "abdomen", "abdômen", "flanco", "culote"],
     objective: "Apoiar o remodelamento corporal e a melhora do contorno da região avaliada, considerando hábitos, contraindicações e resposta progressiva.",
     actives: "Ativos cosméticos firmadores, drenantes ou lipolíticos não invasivos, conforme avaliação profissional e protocolo da clínica.",
-    techniques: ["Avaliação da região e registro de medidas", "Criolipólise", "Ultrassom cavitacional", "Ultrassom microfocado", "Eletrolipólise", "Vacum laser", "Ondas de choque", "Manta térmica", "Correntes excitomotoras", "Radiofrequência", "Criofrequência", "Endermoterapia", "Massagem modeladora"],
+    techniques: ["Criolipólise", "Ultrassom cavitacional", "Ultrassom microfocado", "Eletrolipólise", "Vacum laser", "Ondas de choque", "Manta térmica", "Corrente excitomotoras", "Radiofrequência", "Criofrequência", "Endermoterapia", "Massagem modeladora"],
     equipments: ["Ultrassom cavitacional", "radiofrequência", "criofrequência", "endermoterapia", "ondas de choque, correntes excitomotoras ou recursos disponíveis conforme avaliação."],
     contraindications: ["Gestação", "marca-passo", "alterações cardíacas", "sensibilidade local", "contraindicações para eletroterapia, ultrassom ou recursos térmicos."],
     warnings: ["Não prometer redução de medidas. Acompanhar por medidas, fotos autorizadas e relato do cliente."],
@@ -200,6 +208,51 @@ export const marieTreatmentKnowledge: Record<MarieProtocolKey, MarieTreatmentPro
     homeCare: ["Hidratação", "repouso conforme necessidade", "observar desconfortos e relatar reações."]
   }
 };
+
+const concernMetadata: Record<MarieProtocolKey, { label: string; description: string }> = {
+  facial_rejuvenescimento: { label: "Rejuvenescimento Facial", description: "Linhas finas, rugas, viço e firmeza facial." },
+  facial_acne: { label: "Acne e oleosidade", description: "Acne, comedões, inflamação e oleosidade." },
+  facial_clareamento: { label: "Clareamento facial / manchas / melasma", description: "Manchas, melasma e hipercromias faciais." },
+  facial_olheiras: { label: "Olheiras", description: "Avaliação e cuidado da região periocular." },
+  facial_flacidez_papada: { label: "Flacidez facial / papada", description: "Flacidez facial, papada e contorno." },
+  facial_sinais_cicatrizes: { label: "Sinais e cicatrizes", description: "Sinais e cicatrizes que exigem avaliação profissional." },
+  facial_outras: { label: "Revitalização / limpeza / detox facial", description: "Revitalização, limpeza, drenagem e detox facial." },
+  corporal_gordura: { label: "Gordura localizada", description: "Gordura localizada e contorno corporal." },
+  corporal_estrias: { label: "Estrias", description: "Estrias recentes ou antigas." },
+  corporal_celulite: { label: "Celulite", description: "Celulite, retenção e alterações associadas." },
+  corporal_flacidez: { label: "Flacidez e tonificação corporal", description: "Flacidez e tonificação corporal." },
+  corporal_clareamento: { label: "Clareamento corporal", description: "Clareamento corporal das áreas previstas nos materiais." },
+  corporal_relaxamento: { label: "Relaxamento / drenagem / detox corporal", description: "Relaxamento, drenagem e detox corporal." }
+};
+
+export const treatmentConcernOptions: TreatmentConcernOption[] = Object.values(marieTreatmentKnowledge).map((protocol) => ({
+  label: concernMetadata[protocol.key].label,
+  value: protocol.key,
+  area: protocol.area as Exclude<MarieArea, "BOTH">,
+  description: concernMetadata[protocol.key].description,
+  procedures: [...protocol.techniques]
+}));
+
+export function getTreatmentConcernOption(value?: string | null) {
+  return treatmentConcernOptions.find((option) => option.value === value);
+}
+
+export function getTreatmentConcernOptionsForArea(area: MarieArea) {
+  return area === "BOTH" ? treatmentConcernOptions : treatmentConcernOptions.filter((option) => option.area === area);
+}
+
+export function isTreatmentConcernCompatible(value: string | null | undefined, area?: MarieArea | null) {
+  const option = getTreatmentConcernOption(value);
+  return Boolean(option && (!area || area === "BOTH" || option.area === area));
+}
+
+export function getTreatmentConcernGroups(area: MarieArea) {
+  const options = getTreatmentConcernOptionsForArea(area);
+  return {
+    facial: options.filter((option) => option.area === "FACIAL"),
+    body: options.filter((option) => option.area === "BODY")
+  };
+}
 
 export function getProtocolByKey(key: MarieProtocolKey) {
   return marieTreatmentKnowledge[key];

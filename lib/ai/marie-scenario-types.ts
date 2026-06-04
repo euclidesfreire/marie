@@ -64,6 +64,8 @@ export type MarieContextSummary = {
   treatmentGoal: string;
   area: MarieArea;
   explicitArea?: MarieArea;
+  primaryTreatmentConcern?: MarieProtocolKey;
+  primaryTreatmentConcernCompatible: boolean;
   step: string;
   appointmentStatus?: string;
   hasAppointment: boolean;

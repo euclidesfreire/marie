@@ -8,7 +8,7 @@ import {
   normalizeMarieText
 } from "@/lib/ai/marie-context-analyzer";
 import { detectMarieIntent } from "@/lib/ai/marie-intent-detector";
-import { getProtocolByKey } from "@/lib/ai/marie-knowledge-base";
+import { getProtocolByKey, getTreatmentConcernOption } from "@/lib/ai/marie-knowledge-base";
 import { buildDynamicProtocolPayload, buildProcedurePlan } from "@/lib/ai/marie-protocol-builder";
 import { detectMarieRisks, detectSafetyProfile } from "@/lib/ai/marie-risk-engine";
 import type { MarieCommandGoal, MarieContextSummary, MarieScenario } from "@/lib/ai/marie-scenario-types";
@@ -96,6 +96,10 @@ function detectContradictions(summary: MarieContextSummary, commandGoal: MarieCo
   const asksAbrasive = includesAny(summary.normalizedCommand, ["peeling", "abrasivo", "extracao", "extração", "diamante"]);
   const asksElectro = includesAny(summary.normalizedCommand, ["radiofrequencia", "radiofrequência", "corrente", "eletro", "ultrassom", "criofrequencia", "criofrequência"]);
 
+  if (summary.primaryTreatmentConcern && !summary.primaryTreatmentConcernCompatible) {
+    const label = getTreatmentConcernOption(summary.primaryTreatmentConcern)?.label ?? summary.primaryTreatmentConcern.replaceAll("_", " ");
+    contradictions.push(`A indicação principal selecionada (${label}) não é compatível com a área avaliada (${summary.area.toLowerCase()}).`);
+  }
   if (asksClearance && includesAny(text, ["exposicao solar intensa", "exposição solar intensa", "filtro irregular", "sem filtro", "nao usa filtro", "não usa filtro"])) {
     contradictions.push("Foi solicitado clareamento, mas há exposição solar relevante ou fotoproteção irregular.");
   }
@@ -193,46 +197,54 @@ function openingFor(scenario: MarieScenario) {
   return options[index];
 }
 
-export function buildDynamicMarieMessage(scenario: MarieScenario, context: MarieContextPayload) {
-  const summary = buildMarieContextSummary(context);
-  const detected = `Detectei um cenário provável de ${scenario.subtype.replaceAll("_", " ")} na área ${scenario.area.toLowerCase()}, com confiança de ${Math.round(scenario.confidence * 100)}%.`;
-  const gaps = scenario.missingFields.length ? `Antes de validar, faltam: ${sentenceList(scenario.missingFields)}.` : "Os dados essenciais permitem avançar para uma proposta revisável.";
-  const risk = scenario.detectedRisks.length ? `Atenção a: ${sentenceList(scenario.detectedRisks)}.` : "Não identifiquei risco importante nos dados informados.";
-  const contradiction = scenario.contradictions.length ? `Também encontrei esta incoerência: ${sentenceList(scenario.contradictions)}.` : "";
-  const history = summary.hasPreviousHistory
-    ? `Há histórico registrado (${summary.protocolCount} protocolo(s) e ${summary.evolutionCount} evolução(ões)); esta proposta pode ser tratada como ajuste e comparada à resposta anterior.`
-    : "Não há histórico clínico suficiente para comparação; recomendo acompanhar a primeira resposta.";
-  const practical = scenario.commandGoal === "ASK_QUESTIONS"
-    ? `Eu começaria por: ${sentenceList(scenario.suggestedQuestions.slice(0, 3))}`
-    : scenario.commandGoal === "GENERATE_EVOLUTION" && !summary.hasEvolutionForAppointment
-      ? "Sugiro registrar tolerância, resposta observada, intercorrências, adesão ao home care e próximos passos."
-      : scenario.shouldSuggestProtocol
-        ? `A linha prática prioriza ${sentenceList(scenario.recommendedProcedures.slice(0, 3))}.`
-        : `Para esta etapa, sugiro revisar ${sentenceList(scenario.suggestedQuestions.slice(0, 2))}.`;
-
-  return `${openingFor(scenario)} ${detected} ${risk} ${gaps} ${contradiction} ${history} ${practical} O profissional pode validar, ajustar ou rejeitar. ${principle}`;
+function safetyReminder(scenario: MarieScenario) {
+  if (!scenario.detectedRisks.length && !scenario.contradictions.length) return "";
+  return `Lembretes de segurança: ${sentenceList([...scenario.detectedRisks, ...scenario.contradictions])}. Esses pontos devem ser revisados antes da conduta.`;
 }
+
+function messageEnding(scenario: MarieScenario) {
+  const hasProtocolAction = scenario.careMaturity !== "NO_APPOINTMENT" && scenario.shouldSuggestProtocol;
+  if (hasProtocolAction) return "O profissional pode validar, ajustar ou rejeitar o plano sugerido.";
+  if (scenario.commandGoal === "WARN") return "Esses pontos são lembretes de segurança antes da conduta.";
+  if (scenario.step === "ANAMNESIS" || scenario.step === "ASSESSMENT") return "Esses pontos servem como apoio para complementar a anamnese.";
+  if (scenario.step === "EXECUTION") return "Use como checklist de registro, sem inventar parâmetros técnicos.";
+  if (scenario.step === "EVOLUTION") return "Use como rascunho de evolução, ajustando conforme a resposta real da paciente.";
+  return principle;
+}
+
+export function buildMessageForStep(scenario: MarieScenario, context: MarieContextPayload) {
+  const summary = buildMarieContextSummary(context);
+  const gaps = scenario.missingFields.length ? `Ainda faltam: ${sentenceList(scenario.missingFields)}.` : "Os dados essenciais desta etapa estão razoavelmente preenchidos.";
+  const questions = scenario.suggestedQuestions.length ? `Antes de avançar, eu confirmaria: ${sentenceList(scenario.suggestedQuestions.slice(0, 4))}` : "";
+  const safety = safetyReminder(scenario);
+  const history = summary.hasPreviousHistory
+    ? `Há histórico registrado com ${summary.protocolCount} protocolo(s) e ${summary.evolutionCount} evolução(ões) para comparação.`
+    : "Ainda não há histórico suficiente para comparação.";
+  const byStep: Record<string, string> = {
+    PREPARATION: `Vou organizar o contexto inicial antes do atendimento. ${history} ${gaps} ${questions}`,
+    ANAMNESIS: `Na anamnese, considerei a queixa, o objetivo, a área ${scenario.area.toLowerCase()} e os dados de segurança. ${gaps} ${questions}`,
+    ASSESSMENT: `Na avaliação, eu cruzaria a área ${scenario.area.toLowerCase()} com a anamnese, os riscos percebidos e os achados técnicos. ${gaps} ${questions}`,
+    CARE_PLAN: `Para o plano de cuidado, a indicação provável é ${scenario.intent.replaceAll("_", " ")}. Recomendo priorizar ${sentenceList(scenario.recommendedProcedures.slice(0, 4)) || "a revisão dos dados antes de escolher procedimentos"}. Procedimentos opcionais ou a evitar devem ser revisados pela profissional.`,
+    EXECUTION: `Na execução, registre somente o que foi realmente realizado: procedimento, produtos, parâmetros conforme protocolo interno, duração, tolerância, intercorrências e cuidados entregues.`,
+    EVOLUTION: `Na evolução, compare a resposta real da paciente com o protocolo e o histórico. Registre tolerância, resposta observada, ajustes e próximos passos. ${history}`,
+    COMPLETION: `Na finalização, revise pendências, execução, evolução e necessidade de retorno ou acompanhamento. ${gaps} ${history}`
+  };
+  const stepOpening: Record<string, string> = {
+    PREPARATION: "Antes de começar, vou organizar o que já existe.",
+    ANAMNESIS: "Pelo que está registrado até aqui, há pontos úteis para complementar.",
+    ASSESSMENT: "Ao cruzar avaliação e anamnese, eu observaria alguns pontos técnicos.",
+    CARE_PLAN: openingFor(scenario),
+    EXECUTION: "Para registrar esta sessão com clareza, eu priorizaria os dados realmente executados.",
+    EVOLUTION: "Para construir uma evolução útil, eu compararia a sessão com a resposta observada.",
+    COMPLETION: "Antes de encerrar, vale revisar o atendimento como um todo."
+  };
+  return `${stepOpening[scenario.step] ?? stepOpening.ANAMNESIS} ${byStep[scenario.step] ?? byStep.ANAMNESIS} ${safety} ${messageEnding(scenario)}`.replace(/\s+/g, " ").trim();
+}
+
+export const buildDynamicMarieMessage = buildMessageForStep;
 
 function protocolAction(scenario: MarieScenario) {
   return action("CREATE_PROTOCOL_SUGGESTION", "Preencher plano de cuidado", "Criar rascunho contextualizado para edição e validação profissional.", buildDynamicProtocolPayload(scenario));
-}
-
-function questionsAction(scenario: MarieScenario) {
-  return action("CREATE_CLINICAL_NOTE", "Registrar perguntas e lacunas", "Preparar perguntas complementares no formulário da etapa atual.", {
-    content: `Perguntas sugeridas:\n${scenario.suggestedQuestions.map((item) => `- ${item}`).join("\n")}\n\nLacunas detectadas: ${scenario.missingFields.join("; ") || "nenhuma essencial"}.`,
-    notes: scenario.suggestedQuestions.join("\n"),
-    professionalAnalysis: scenario.explanation
-  });
-}
-
-function warningAction(scenario: MarieScenario) {
-  return action("REVIEW_CONTRAINDICATIONS", "Revisar contraindicações antes do plano", "Organizar riscos, incoerências e procedimentos a evitar.", {
-    review: `${scenario.explanation}\n\nProcedimentos a evitar/revisar: ${scenario.avoidedProcedures.join("; ") || "confirmar conforme avaliação profissional"}.`,
-    risks: scenario.detectedRisks,
-    cautions: scenario.contradictions,
-    perceivedRisks: [...scenario.detectedRisks, ...scenario.contradictions].join("; "),
-    technicalNotes: scenario.explanation
-  });
 }
 
 function homeCareAction(scenario: MarieScenario) {
@@ -274,20 +286,17 @@ export function buildDynamicMarieActions(scenario: MarieScenario, context: Marie
   const actions: MarieAction[] = [];
 
   if (scenario.careMaturity === "NO_APPOINTMENT") {
-    actions.push(action("START_APPOINTMENT", "Iniciar atendimento", "Abrir o atendimento pela Anamnese inicial.", { status: "IN_PROGRESS", currentStep: "ANAMNESIS" }));
+    return [action("START_APPOINTMENT", "Iniciar atendimento", "Abrir o atendimento pela Anamnese inicial.", { status: "IN_PROGRESS", currentStep: "ANAMNESIS" })];
   }
-  if (scenario.shouldSuggestQuestions || scenario.commandGoal === "ASK_QUESTIONS") actions.push(questionsAction(scenario));
-  if (scenario.shouldWarnProfessional || scenario.commandGoal === "WARN") actions.push(warningAction(scenario));
   if (scenario.shouldSuggestProtocol) actions.push(protocolAction(scenario));
-  if (scenario.commandGoal === "GENERATE_HOME_CARE" || ["EXECUTION", "EVOLUTION"].includes(scenario.step)) actions.push(homeCareAction(scenario));
   if (scenario.commandGoal === "REGISTER_EXECUTION" || scenario.step === "EXECUTION") actions.push(executionAction(scenario));
   if (scenario.commandGoal === "GENERATE_EVOLUTION" || scenario.step === "EVOLUTION") actions.push(evolutionAction(scenario, context));
+  if (scenario.commandGoal === "GENERATE_HOME_CARE" || scenario.step === "EXECUTION") actions.push(homeCareAction(scenario));
   if (scenario.commandGoal === "SUMMARIZE" || scenario.step === "COMPLETION") actions.push(summaryAction(scenario, context));
   if (scenario.commandGoal === "FINISH") {
     actions.push(summaryAction(scenario, context));
     actions.push(action("FINISH_APPOINTMENT", "Finalizar atendimento", "Finalizar somente após revisão explícita das pendências.", { status: "FINISHED", currentStep: "COMPLETION", pendingReview: scenario.contradictions }));
   }
-  if (actions.length === 0) actions.push(summaryAction(scenario, context));
   const seen = new Set<string>();
   return actions.filter((item) => {
     if (seen.has(item.type)) return false;
@@ -298,7 +307,7 @@ export function buildDynamicMarieActions(scenario: MarieScenario, context: Marie
 
 export function buildMarieResponseFromScenario(scenario: MarieScenario, context: MarieContextPayload): MarieResponse {
   return {
-    message: buildDynamicMarieMessage(scenario, context),
+    message: buildMessageForStep(scenario, context),
     warnings: unique([...scenario.detectedRisks, ...scenario.contradictions, principle]),
     actions: buildDynamicMarieActions(scenario, context)
   };

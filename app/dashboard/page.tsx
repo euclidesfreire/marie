@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import {
   Activity,
   BarChart3,
@@ -83,12 +84,15 @@ export default async function DashboardPage() {
                 </div>
                 <p className="mt-5 rounded-full border border-blue-100 bg-white/70 px-3 py-2 text-xs font-semibold text-senac-blue">Atendimento estético assistido, com validação profissional em cada etapa.</p>
               </div>
-              <div className="relative hidden items-end justify-center lg:flex">
-                <div className="absolute bottom-0 h-[310px] w-[250px] rounded-t-[120px] bg-gradient-to-b from-senac-blue to-[#061f52] shadow-panel" />
-                <div className="absolute bottom-[250px] h-24 w-24 rounded-full bg-gradient-to-b from-[#f4b28d] to-[#c06d45] shadow-soft" />
-                <div className="absolute bottom-[306px] h-20 w-28 rounded-t-full bg-[#1d1a24]" />
-                <div className="absolute bottom-[146px] h-32 w-44 rounded-[36px] border border-white/20 bg-[#072F6B] shadow-soft" />
-                <div className="absolute bottom-[120px] rounded-full bg-senac-orange px-3 py-1 text-[11px] font-bold text-white shadow-soft">Marie</div>
+              <div className="relative hidden min-h-[360px] items-end justify-center lg:flex">
+                <Image
+                  src="/images/marie-avatar.png"
+                  alt="Marie, assistente de atendimento estético"
+                  width={1188}
+                  height={1324}
+                  priority
+                  className="absolute bottom-0 right-0 h-[410px] w-auto max-w-none object-contain object-bottom drop-shadow-[0_18px_24px_rgba(10,61,145,0.16)] xl:h-[440px]"
+                />
               </div>
             </div>
           </section>

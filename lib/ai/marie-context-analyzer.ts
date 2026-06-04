@@ -1,4 +1,4 @@
-import type { MarieArea } from "@/lib/ai/marie-knowledge-base";
+import { getTreatmentConcernOption, type MarieArea, type MarieProtocolKey } from "@/lib/ai/marie-knowledge-base";
 import type { MarieCareMaturity, MarieCaseSubtype, MarieCommandGoal, MarieContextSummary } from "@/lib/ai/marie-scenario-types";
 
 export type MarieContextLike = {
@@ -9,6 +9,8 @@ export type MarieContextLike = {
   suggestions?: any[];
   protocols?: any[];
   evolutions?: any[];
+  primaryTreatmentConcern?: MarieProtocolKey | null;
+  mainTreatmentIndication?: MarieProtocolKey | null;
   professionalCommand: string;
 };
 
@@ -80,6 +82,15 @@ export function getCurrentStep(context: MarieContextLike) {
 export function getMarieArea(context: MarieContextLike): MarieArea {
   const assessed = context.assessment?.assessedArea;
   if (assessed === "FACIAL" || assessed === "BODY" || assessed === "BOTH") return assessed;
+  const selectedConcern = getTreatmentConcernOption(
+    context.primaryTreatmentConcern
+    ?? context.mainTreatmentIndication
+    ?? context.assessment?.primaryTreatmentConcern
+    ?? context.assessment?.mainTreatmentIndication
+    ?? context.appointment?.primaryTreatmentConcern
+    ?? context.appointment?.mainTreatmentIndication
+  );
+  if (selectedConcern) return selectedConcern.area;
 
   const text = normalizeMarieText([
     context.professionalCommand,
@@ -194,6 +205,17 @@ export function buildMarieContextSummary(context: MarieContextLike): MarieContex
   const hasApprovedProtocol = (context.protocols ?? []).some((item) => ["APPROVED", "APPLIED"].includes(item.status));
   const hasProtocolDraft = (context.suggestions ?? []).some((item) => ["DRAFT", "WAITING_REVIEW", "ADJUSTED"].includes(item.status)) || (context.protocols ?? []).some((item) => item.status === "DRAFT");
   const hasEvolutionForAppointment = (context.evolutions ?? []).some((item) => !context.appointment?.id || item.appointmentId === context.appointment.id);
+  const selectedConcern = context.primaryTreatmentConcern
+    ?? context.mainTreatmentIndication
+    ?? context.assessment?.primaryTreatmentConcern
+    ?? context.assessment?.mainTreatmentIndication
+    ?? context.appointment?.primaryTreatmentConcern
+    ?? context.appointment?.mainTreatmentIndication
+    ?? null;
+  const concernOption = getTreatmentConcernOption(selectedConcern);
+  const area = getMarieArea(context);
+  const explicitArea = ["FACIAL", "BODY", "BOTH"].includes(assessment.assessedArea) ? assessment.assessedArea as MarieArea : undefined;
+  const primaryTreatmentConcernCompatible = !concernOption || !explicitArea || explicitArea === "BOTH" || concernOption.area === explicitArea;
 
   return {
     command: context.professionalCommand,
@@ -207,8 +229,10 @@ export function buildMarieContextSummary(context: MarieContextLike): MarieContex
     historyText,
     chiefComplaint: anamnesis.chiefComplaint ?? appointment.dailyComplaint ?? "",
     treatmentGoal: anamnesis.treatmentGoal ?? "",
-    area: getMarieArea(context),
-    explicitArea: ["FACIAL", "BODY", "BOTH"].includes(assessment.assessedArea) ? assessment.assessedArea : undefined,
+    area,
+    explicitArea,
+    primaryTreatmentConcern: concernOption?.value,
+    primaryTreatmentConcernCompatible,
     step: getCurrentStep(context),
     appointmentStatus: appointment.status,
     hasAppointment: Boolean(context.appointment),
@@ -231,7 +255,7 @@ export function detectCommandGoal(summary: MarieContextSummary): MarieCommandGoa
   if (includesAny(command, ["finalizar", "encerrar", "concluir atendimento"])) return "FINISH";
   if (includesAny(command, ["home care", "orientacao", "orientação", "cuidados pos", "cuidados pós", "pos-procedimento", "pós-procedimento"])) return "GENERATE_HOME_CARE";
   if (includesAny(command, ["ajustar", "corrigir", "melhorar protocolo", "alterar plano", "revisar plano"])) return "ADJUST_PROTOCOL";
-  if (includesAny(command, ["gerar protocolo", "sugerir protocolo", "plano de cuidado", "criar plano", "sugerir plano"])) return "SUGGEST_PROTOCOL";
+  if (includesAny(command, ["gerar protocolo", "sugerir protocolo", "plano de cuidado", "criar plano", "sugerir plano", "preencher plano", "sugerir tratamento", "gerar tratamento", "criar tratamento", "sugerir conduta"])) return "SUGGEST_PROTOCOL";
   if (includesAny(command, ["execucao", "execução", "registrar procedimento", "registrar sessao", "registrar sessão"])) return "REGISTER_EXECUTION";
   if (includesAny(command, ["evolucao", "evolução", "retorno", "proximos passos", "próximos passos"])) return "GENERATE_EVOLUTION";
   if (includesAny(command, ["pergunta", "o que perguntar", "complementar anamnese", "lacuna"])) return "ASK_QUESTIONS";
