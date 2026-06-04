@@ -63,11 +63,26 @@ function pickFields(source: Record<string, any>, fields: string[]) {
 const anamnesisFields = ["chiefComplaint", "treatmentGoal", "allergies", "medications", "preExistingConditions", "previousProcedures", "skinType", "skinSensitivity", "contraindications", "habits", "notes"];
 const assessmentFields = ["assessedArea", "professionalAnalysis", "skinCondition", "bodyCondition", "perceivedRisks", "technicalNotes"];
 
-function TextField({ label, name, value, textarea, required, type = "text" }: { label: string; name: string; value?: string | null; textarea?: boolean; required?: boolean; type?: string }) {
+function withStructuredSkinNotes(payload: Record<string, any>) {
+  const extras = [
+    ["Uso recente de ácidos/retinoides", payload.acidUseNotes],
+    ["Exposição solar recente", payload.sunExposureNotes],
+    ["Fotoproteção", payload.photoprotectionNotes]
+  ].filter(([, value]) => typeof value === "string" && value.trim().length > 0);
+
+  if (!extras.length) return payload;
+  const details = extras.map(([label, value]) => `${label}: ${value}`).join("\n");
+  return {
+    ...payload,
+    notes: [payload.notes, `Pele e sensibilidade:\n${details}`].filter(Boolean).join("\n\n")
+  };
+}
+
+function TextField({ label, name, value, textarea, required, type = "text", placeholder }: { label: string; name: string; value?: string | null; textarea?: boolean; required?: boolean; type?: string; placeholder?: string }) {
   return (
     <label className="grid gap-1.5 text-sm font-medium text-foreground">
       {label}
-      {textarea ? <Textarea name={name} defaultValue={value ?? ""} required={required} /> : <Input type={type} name={name} defaultValue={value ?? ""} required={required} />}
+      {textarea ? <Textarea name={name} defaultValue={value ?? ""} required={required} placeholder={placeholder} /> : <Input type={type} name={name} defaultValue={value ?? ""} required={required} placeholder={placeholder} />}
     </label>
   );
 }
@@ -87,6 +102,21 @@ function SectionHeader({ title, description }: { title: string; description: str
       <h3 className="text-base font-semibold text-foreground">{title}</h3>
       <p className="mt-1 text-sm leading-5 text-muted">{description}</p>
     </div>
+  );
+}
+
+function AccordionSection({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
+  return (
+    <details className="group rounded-[14px] border border-border bg-white shadow-soft">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+        <span>
+          <span className="block text-sm font-semibold text-dark-accent">{title}</span>
+          <span className="mt-0.5 block text-xs leading-5 text-muted">{description}</span>
+        </span>
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border text-lg leading-none text-muted transition group-open:rotate-45 group-open:text-senac-orange">+</span>
+      </summary>
+      <div className="space-y-3 border-t border-border bg-[#F8FAFD] px-4 py-3">{children}</div>
+    </details>
   );
 }
 
@@ -279,60 +309,69 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
         )}
 
         {activeTab === "Anamnese" && (
-          <StepForm title="Anamnese" description="Anamnese clínica, avaliação estética inicial e pontos de atenção para a Marie em uma única etapa.">
+          <StepForm title="Anamnese inicial" description="Registre os dados essenciais do atendimento. A Marie pode sugerir perguntas e pontos de atenção, mas o registro é profissional.">
             <form key={`anamnesis-${draftAction?.id ?? "base"}`} className="space-y-4" onSubmit={(event) => {
               event.preventDefault();
-              const payload = formObject(new FormData(event.currentTarget));
+              const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+              const shouldAdvance = submitter?.value !== "draft";
+              const payload = withStructuredSkinNotes(formObject(new FormData(event.currentTarget)));
               run(async () => {
                 await submit(anamnesis ? `/api/anamneses/${anamnesis.id}` : `/api/patients/${patient.id}/anamneses`, anamnesis ? "PUT" : "POST", pickFields(payload, anamnesisFields), "Anamnese salva.");
                 if (appointment) {
                   await submit(assessment ? `/api/assessments/${assessment.id}` : `/api/appointments/${appointment.id}/assessment`, assessment ? "PUT" : "POST", pickFields(payload, assessmentFields), "Avaliação inicial salva.");
-                  await submit(`/api/appointments/${appointment.id}/step`, "PUT", { step: "CARE_PLAN" }, "Próxima etapa: plano de cuidado.");
+                  if (shouldAdvance) await submit(`/api/appointments/${appointment.id}/step`, "PUT", { step: "CARE_PLAN" }, "Próxima etapa: plano de cuidado.");
                 }
-                setActiveTab("Plano de cuidado");
+                if (shouldAdvance) setActiveTab("Plano de cuidado");
               });
             }}>
-              <div className="rounded-[14px] border border-border bg-[#F8FAFD] p-3.5">
-                <p className="mb-3 text-sm font-semibold text-dark-accent">1. Dados principais</p>
-                <div className="space-y-3">
-                  <TextField label="Queixa principal" name="chiefComplaint" value={draftPayload.chiefComplaint ?? anamnesis?.chiefComplaint} textarea required />
-                  <TextField label="Objetivo do tratamento" name="treatmentGoal" value={draftPayload.treatmentGoal ?? anamnesis?.treatmentGoal} textarea />
+              <div className="rounded-[14px] border border-border bg-white p-4 shadow-soft">
+                <div className="mb-4">
+                  <p className="text-sm font-semibold text-dark-accent">Dados essenciais</p>
+                  <p className="mt-1 text-xs leading-5 text-muted">Preencha o mínimo clínico para orientar a Marie e avançar com segurança.</p>
                 </div>
-              </div>
-
-              <div className="rounded-[14px] border border-border bg-[#F8FAFD] p-3.5">
-                <p className="mb-3 text-sm font-semibold text-dark-accent">2. Histórico e segurança</p>
-                <div className="space-y-3">
-                  <TextField label="Alergias" name="allergies" value={draftPayload.allergies ?? anamnesis?.allergies} textarea />
-                  <TextField label="Medicamentos" name="medications" value={draftPayload.medications ?? anamnesis?.medications} textarea />
-                  <TextField label="Doenças/condições pré-existentes" name="preExistingConditions" value={draftPayload.preExistingConditions ?? anamnesis?.preExistingConditions} textarea />
-                  <TextField label="Procedimentos anteriores" name="previousProcedures" value={draftPayload.previousProcedures ?? anamnesis?.previousProcedures} textarea />
-                  <TextField label="Contraindicações" name="contraindications" value={draftPayload.contraindications ?? anamnesis?.contraindications} textarea />
-                  <TextField label="Hábitos" name="habits" value={draftPayload.habits ?? anamnesis?.habits} textarea />
-                  <TextField label="Observações" name="notes" value={draftPayload.notes ?? anamnesis?.notes} textarea />
-                </div>
-              </div>
-
-              <div className="rounded-[14px] border border-border bg-[#F8FAFD] p-3.5">
-                <p className="mb-3 text-sm font-semibold text-dark-accent">3. Avaliação estética inicial</p>
                 <div className="space-y-3">
                   <label className="grid gap-1.5 text-sm font-medium">Área avaliada
-                    <select name="assessedArea" defaultValue={draftPayload.assessedArea ?? assessment?.assessedArea ?? "FACIAL"} className="h-10 rounded-md border border-border bg-white px-3 text-sm">
+                    <select name="assessedArea" defaultValue={draftPayload.assessedArea ?? assessment?.assessedArea ?? "FACIAL"} required className="h-11 rounded-xl border border-border bg-white px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-blue-100">
                       <option value="FACIAL">Facial</option>
                       <option value="BODY">Corporal</option>
                       <option value="BOTH">Facial e corporal</option>
                     </select>
                   </label>
-                  <TextField label="Tipo de pele" name="skinType" value={draftPayload.skinType ?? anamnesis?.skinType} textarea />
-                  <TextField label="Sensibilidade" name="skinSensitivity" value={draftPayload.skinSensitivity ?? anamnesis?.skinSensitivity} textarea />
-                  <TextField label="Condição da pele" name="skinCondition" value={draftPayload.skinCondition ?? assessment?.skinCondition} textarea />
-                  <TextField label="Condição corporal" name="bodyCondition" value={draftPayload.bodyCondition ?? assessment?.bodyCondition} textarea />
-                  <TextField label="Análise profissional" name="professionalAnalysis" value={draftPayload.professionalAnalysis ?? assessment?.professionalAnalysis} textarea />
-                  <TextField label="Riscos percebidos" name="perceivedRisks" value={draftPayload.perceivedRisks ?? assessment?.perceivedRisks} textarea />
-                  <TextField label="Observações técnicas" name="technicalNotes" value={draftPayload.technicalNotes ?? assessment?.technicalNotes} textarea />
+                  <TextField label="Queixa principal" name="chiefComplaint" value={draftPayload.chiefComplaint ?? anamnesis?.chiefComplaint} textarea required placeholder="Ex.: gordura localizada, acne, manchas, flacidez, rejuvenescimento..." />
+                  <TextField label="Objetivo do atendimento" name="treatmentGoal" value={draftPayload.treatmentGoal ?? anamnesis?.treatmentGoal} textarea placeholder="Ex.: reduzir medidas, melhorar textura da pele, controlar oleosidade..." />
+                  <TextField label="Restrições / contraindicações" name="contraindications" value={draftPayload.contraindications ?? anamnesis?.contraindications} textarea placeholder="Ex.: alergias, gestação, uso de ácidos, sensibilidade, doenças, medicações..." />
+                  <TextField label="Observações profissionais" name="notes" value={draftPayload.notes ?? anamnesis?.notes} textarea placeholder="Registre sua análise inicial, pontos de atenção e observações relevantes..." />
                 </div>
               </div>
-              <Button size="sm" variant="primary" disabled={isPending}><Save className="h-4 w-4" />Salvar anamnese</Button>
+
+              <AccordionSection title="Histórico clínico" description="Medicações, alergias, condições pré-existentes e hábitos relevantes.">
+                <TextField label="Medicamentos em uso" name="medications" value={draftPayload.medications ?? anamnesis?.medications} textarea />
+                <TextField label="Doenças/condições pré-existentes" name="preExistingConditions" value={draftPayload.preExistingConditions ?? anamnesis?.preExistingConditions} textarea />
+                <TextField label="Alergias detalhadas" name="allergies" value={draftPayload.allergies ?? anamnesis?.allergies} textarea />
+                <TextField label="Procedimentos anteriores" name="previousProcedures" value={draftPayload.previousProcedures ?? anamnesis?.previousProcedures} textarea />
+                <TextField label="Hábitos relevantes" name="habits" value={draftPayload.habits ?? anamnesis?.habits} textarea />
+              </AccordionSection>
+
+              <AccordionSection title="Pele e sensibilidade" description="Dados úteis para a Marie ajustar cautela, fotoproteção e barreira cutânea.">
+                <TextField label="Tipo de pele" name="skinType" value={draftPayload.skinType ?? anamnesis?.skinType} textarea />
+                <TextField label="Sensibilidade" name="skinSensitivity" value={draftPayload.skinSensitivity ?? anamnesis?.skinSensitivity} textarea />
+                <TextField label="Uso recente de ácidos/retinoides" name="acidUseNotes" value={draftPayload.acidUseNotes} textarea />
+                <TextField label="Exposição solar recente" name="sunExposureNotes" value={draftPayload.sunExposureNotes} textarea />
+                <TextField label="Fotoproteção" name="photoprotectionNotes" value={draftPayload.photoprotectionNotes} textarea />
+              </AccordionSection>
+
+              <AccordionSection title="Avaliação estética inicial" description="Achados técnicos mantidos para avaliação, IA e plano de cuidado.">
+                <TextField label="Condição da pele" name="skinCondition" value={draftPayload.skinCondition ?? assessment?.skinCondition} textarea />
+                <TextField label="Condição corporal" name="bodyCondition" value={draftPayload.bodyCondition ?? assessment?.bodyCondition} textarea />
+                <TextField label="Análise profissional" name="professionalAnalysis" value={draftPayload.professionalAnalysis ?? assessment?.professionalAnalysis} textarea />
+                <TextField label="Riscos percebidos" name="perceivedRisks" value={draftPayload.perceivedRisks ?? assessment?.perceivedRisks} textarea />
+                <TextField label="Observações técnicas" name="technicalNotes" value={draftPayload.technicalNotes ?? assessment?.technicalNotes} textarea />
+              </AccordionSection>
+
+              <div className="flex flex-wrap gap-2 border-t border-border pt-3">
+                <Button name="intent" value="draft" size="sm" disabled={isPending}><Save className="h-4 w-4" />Salvar rascunho</Button>
+                <Button name="intent" value="advance" size="sm" variant="primary" disabled={isPending}><Save className="h-4 w-4" />Salvar e avançar</Button>
+              </div>
             </form>
           </StepForm>
         )}

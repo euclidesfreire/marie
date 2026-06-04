@@ -145,6 +145,7 @@ function preparationResponse(scenario: MarieScenario, context: MarieContextPaylo
 function anamnesisResponse(scenario: MarieScenario, context: MarieContextPayload): MarieResponse {
   const actions: MarieAction[] = [buildContraindicationAction(scenario, context)];
   const asksProtocol = commandAsksForProtocol(context.professionalCommand);
+  const command = context.professionalCommand.toLowerCase();
   if (asksProtocol) actions.push(buildProtocolAction(scenario, context));
   const areaGuidance =
     scenario.area === "BODY"
@@ -152,6 +153,15 @@ function anamnesisResponse(scenario: MarieScenario, context: MarieContextPayload
       : scenario.area === "BOTH"
         ? "Como a área envolve facial e corporal, sugiro separar pontos faciais como sensibilidade, barreira cutânea, manchas e uso de ácidos; e pontos corporais como medidas, flacidez, retenção hídrica e contraindicações vasculares."
         : "Para avaliação facial, sugiro observar sensibilidade, barreira cutânea, textura, manchas, luminosidade, firmeza, uso recente de ácidos/retinoides e fotoproteção.";
+
+  if (command.includes("avalia") || command.includes("ponto") || command.includes("risco") || command.includes("comparar")) {
+    actions.push(action("UPDATE_APPOINTMENT_NOTES", "Preencher avaliação inicial", "Preparar pontos técnicos para a Anamnese inicial.", {
+      professionalAnalysis: areaGuidance,
+      perceivedRisks: scenario.detectedRisks.length ? scenario.detectedRisks.join("; ") : "Sem risco relevante detectado nos dados informados. Confirmar contraindicações manualmente.",
+      technicalNotes: `Motivo da sugestão: ${buildReason(scenario, context)}. Recomenda-se validar presencialmente e registrar achados antes do plano de cuidado.`,
+      evaluation: areaGuidance
+    }));
+  }
 
   return {
     message: `Na anamnese e avaliação inicial, identifiquei ${buildReason(scenario, context)}. ${areaGuidance} ${scenario.missingFields.length ? `Sugiro complementar ${sentenceList(scenario.missingFields)} antes de validar o plano.` : "A etapa traz base suficiente para o plano, desde que o profissional confirme presencialmente."} ${asksProtocol ? "Preparei uma sugestão preliminar, mas ela deve ser revisada com cautela." : "Nesta etapa, priorizo lacunas, perguntas complementares e contraindicações antes de montar protocolo completo."}`,
