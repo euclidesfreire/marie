@@ -185,9 +185,11 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
   }
 
   async function chooseStep(step: StepKey) {
-    setActiveTab(labelFromStep(step));
     const normalizedCurrentStep = appointment?.currentStep === "ASSESSMENT" ? "ANAMNESIS" : appointment?.currentStep;
-    if (!appointment || normalizedCurrentStep === step) return;
+    if (!appointment || normalizedCurrentStep === step) {
+      setActiveTab(labelFromStep(step));
+      return;
+    }
     let reason: string | null = null;
     if (appointment.status === "FINISHED") {
       reason = window.prompt("Motivo da reabertura do atendimento:");
@@ -196,7 +198,8 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
       const ok = window.confirm("Voltar para esta etapa atualizará a etapa atual e poderá marcar etapas posteriores como 'precisa revisão'. Continuar?");
       if (!ok) return;
     }
-    await submit(`/api/appointments/${appointment.id}/step`, "PUT", { step, reason }, "Etapa atualizada.");
+    const updated = await submit(`/api/appointments/${appointment.id}/step`, "PUT", { step, reason }, "Etapa atualizada.");
+    if (updated) setActiveTab(labelFromStep(step));
   }
 
   async function finishAppointment(force = false) {

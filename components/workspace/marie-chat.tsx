@@ -98,7 +98,17 @@ function primaryActionLabel(action: MarieAction, currentStep: string) {
   return "Aplicar como sugestão";
 }
 
-export function MarieChat({ data, onApplied, onEditAction }: { data: any; onApplied: () => void; onEditAction: (action: MarieAction) => void }) {
+export function MarieChat({
+  data,
+  currentStep,
+  onApplied,
+  onEditAction
+}: {
+  data: any;
+  currentStep: string;
+  onApplied: () => void;
+  onEditAction: (action: MarieAction) => void;
+}) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "welcome",
@@ -112,13 +122,12 @@ export function MarieChat({ data, onApplied, onEditAction }: { data: any; onAppl
   const context = useMemo(() => ({
     patient: data.patient,
     anamnesis: data.patient.anamneses?.[0],
-    appointment: data.currentAppointment,
+    appointment: data.currentAppointment ? { ...data.currentAppointment, currentStep } : null,
     assessment: data.currentAppointment?.assessment,
     suggestions: data.patient.suggestions ?? [],
     protocols: data.patient.protocols ?? [],
     evolutions: data.patient.evolutions ?? []
-  }), [data]);
-  const currentStep = data.currentAppointment?.currentStep === "ASSESSMENT" ? "ANAMNESIS" : (data.currentAppointment?.currentStep ?? "ANAMNESIS");
+  }), [currentStep, data]);
   const stepMock = marieStepMocks[currentStep] ?? marieStepMocks.ANAMNESIS;
   const quickCommands = stepMock.quickActions;
 

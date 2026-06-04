@@ -8,15 +8,16 @@ import { Button } from "@/components/ui/button";
 import { CommandSidebar } from "@/components/workspace/command-sidebar";
 import { MarieChat } from "@/components/workspace/marie-chat";
 import { PatientCarePanel } from "@/components/workspace/patient-care-panel";
-import { getMarieActionTargetStep, stepToCareTab } from "@/lib/ai/marie-action-drafts";
+import { careTabToStep, getMarieActionTargetStep, stepToCareTab } from "@/lib/ai/marie-action-drafts";
 
 export function MarieWorkspace({ data }: { data: any }) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState("Anamnese");
+  const [activeTab, setActiveTab] = useState(() => data.currentAppointment ? stepToCareTab(data.currentAppointment.currentStep) : "Preparação");
   const [mobileView, setMobileView] = useState<"assistant" | "patient" | "care">("assistant");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [draftAction, setDraftAction] = useState<MarieAction | null>(null);
+  const activeStep = data.currentAppointment ? careTabToStep(activeTab) : "PREPARATION";
 
   function editAction(action: MarieAction) {
     setDraftAction(action);
@@ -31,7 +32,7 @@ export function MarieWorkspace({ data }: { data: any }) {
           <CommandSidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((value) => !value)} />
         </div>
         <main className="hidden min-w-0 flex-1 border-l border-white/10 lg:block">
-          <MarieChat data={data} onApplied={() => router.refresh()} onEditAction={editAction} />
+          <MarieChat data={data} currentStep={activeStep} onApplied={() => router.refresh()} onEditAction={editAction} />
         </main>
         <div className="hidden h-full w-[560px] shrink-0 bg-white shadow-[-18px_0_44px_rgba(10,61,145,0.08)] xl:w-[620px] 2xl:w-[640px] lg:block">
           <PatientCarePanel data={data} activeTab={activeTab} setActiveTab={setActiveTab} draftAction={draftAction} clearDraftAction={() => setDraftAction(null)} />
@@ -45,7 +46,7 @@ export function MarieWorkspace({ data }: { data: any }) {
             <button onClick={() => setMobileView("care")} className={`flex-1 rounded-xl px-3 py-2 text-sm font-medium ${mobileView === "care" ? "bg-senac-blue text-white" : "text-muted"}`}><Stethoscope className="mr-1 inline h-4 w-4" />Atendimento</button>
           </div>
           <div className="min-h-0 flex-1 overflow-hidden">
-            {mobileView === "assistant" && <MarieChat data={data} onApplied={() => router.refresh()} onEditAction={editAction} />}
+            {mobileView === "assistant" && <MarieChat data={data} currentStep={activeStep} onApplied={() => router.refresh()} onEditAction={editAction} />}
             {mobileView !== "assistant" && <PatientCarePanel data={data} activeTab={mobileView === "patient" ? "Preparação" : activeTab} setActiveTab={setActiveTab} draftAction={draftAction} clearDraftAction={() => setDraftAction(null)} mobile />}
           </div>
         </div>

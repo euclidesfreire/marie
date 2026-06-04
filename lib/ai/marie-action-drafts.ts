@@ -20,6 +20,15 @@ export function stepToCareTab(step?: string | null) {
   return "Anamnese";
 }
 
+export function careTabToStep(tab?: string | null) {
+  if (tab === "Plano de cuidado") return "CARE_PLAN";
+  if (tab === "Execução") return "EXECUTION";
+  if (tab === "Evolução") return "EVOLUTION";
+  if (tab === "Finalização") return "COMPLETION";
+  if (tab === "Preparação") return "PREPARATION";
+  return "ANAMNESIS";
+}
+
 export function isMarieDraftAction(action: MarieAction) {
   return [
     "CREATE_PROTOCOL_SUGGESTION",

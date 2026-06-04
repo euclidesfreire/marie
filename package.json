@@ -7,7 +7,8 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint . --ext .ts,.tsx",
-    "prisma:seed": "tsx prisma/seed.ts"
+    "prisma:seed": "tsx prisma/seed.ts",
+    "validate:marie": "tsx scripts/validate-marie-ai.ts"
   },
   "dependencies": {
     "@prisma/client": "6.19.3",
