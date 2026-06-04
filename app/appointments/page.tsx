@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { ArrowUpRight, FileText } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -26,7 +28,15 @@ export default async function AppointmentsPage() {
                 <p className="font-semibold text-dark-accent">{appointment.patient.name}</p>
                 <p className="text-sm text-muted">{formatDate(appointment.date)}</p>
               </div>
-              <Badge tone={toneForStatus(appointment.status)}>{labelFor(appointment.status)}</Badge>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge tone={toneForStatus(appointment.status)}>{labelFor(appointment.status)}</Badge>
+                <Link href={`/patients/${appointment.patientId}/workspace?appointmentId=${appointment.id}`} className="inline-flex h-9 items-center gap-2 rounded-xl border border-primary bg-primary px-3 text-sm font-medium text-white transition hover:bg-primary-hover">
+                  <ArrowUpRight className="h-4 w-4" />Abrir workspace
+                </Link>
+                <Link href={`/patients/${appointment.patientId}`} className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-white px-3 text-sm font-medium text-foreground transition hover:bg-[#F8FAFD]">
+                  <FileText className="h-4 w-4" />Prontuário
+                </Link>
+              </div>
             </Card>
           ))}
           {appointments.length === 0 && <Card className="p-8 text-center text-sm text-muted">Nenhum atendimento registrado.</Card>}

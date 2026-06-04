@@ -2,15 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, CalendarPlus, ChevronLeft, ChevronRight, FilePlus2, LayoutDashboard, Search, Settings, Sparkles, UsersRound } from "lucide-react";
+import { CalendarPlus, ChevronLeft, ChevronRight, FilePlus2, LayoutDashboard, Search, Settings, Sparkles, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const menu = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Pacientes", href: "/patients", icon: UsersRound },
-  { label: "Atendimentos", href: "/appointments", icon: CalendarPlus },
   { label: "Protocolos", href: "/protocols", icon: FilePlus2 },
-  { label: "Evoluções", href: "/evolutions", icon: Activity },
   { label: "Configurações", href: "/settings", icon: Settings }
 ];
 
@@ -60,9 +58,9 @@ export function CommandSidebar({ collapsed = false, onToggle }: { collapsed?: bo
       </nav>
       <div className={`relative z-10 space-y-3 border-t border-white/10 ${collapsed ? "p-2" : "mx-6 px-0 py-6"}`}>
         {!collapsed && <p className="px-1 text-[11px] font-semibold uppercase tracking-wide text-blue-100/60">Ações rápidas</p>}
-        <Button variant="primary" className={`${collapsed ? "h-10 w-full px-0" : "h-12 w-full justify-start rounded-xl px-5 text-base"} border-senac-orange bg-senac-orange font-semibold text-white hover:bg-senac-orange-strong`} title="Novo atendimento"><CalendarPlus className="h-4 w-4" />{!collapsed && "Novo atendimento"}</Button>
+        <Link href="/patients" className={`inline-flex items-center rounded-xl border border-senac-orange bg-senac-orange font-semibold text-white hover:bg-senac-orange-strong ${collapsed ? "h-10 w-full justify-center px-0" : "h-12 w-full justify-start gap-3 px-5 text-base"}`} title="Novo atendimento"><CalendarPlus className="h-4 w-4" />{!collapsed && "Novo atendimento"}</Link>
         <Link href="/patients/new" className={`inline-flex items-center rounded-xl border border-white/40 bg-white/8 font-semibold text-blue-50 hover:bg-white/14 ${collapsed ? "h-10 w-full justify-center px-0 text-sm" : "h-12 w-full justify-start gap-3 px-5 text-base"}`} title="Novo paciente"><FilePlus2 className="h-4 w-4" />{!collapsed && "Novo paciente"}</Link>
-        <Button className={`${collapsed ? "h-10 w-full px-0" : "h-12 w-full justify-start rounded-xl px-5 text-base"} border-white/40 bg-white/8 font-semibold text-blue-50 hover:bg-white/14 hover:text-white`} title="Buscar paciente"><Search className="h-4 w-4" />{!collapsed && "Buscar paciente"}</Button>
+        <Link href="/patients" className={`inline-flex items-center rounded-xl border border-white/40 bg-white/8 font-semibold text-blue-50 hover:bg-white/14 hover:text-white ${collapsed ? "h-10 w-full justify-center px-0" : "h-12 w-full justify-start gap-3 px-5 text-base"}`} title="Buscar paciente"><Search className="h-4 w-4" />{!collapsed && "Buscar paciente"}</Link>
         <div className={`rounded-xl border border-white/10 bg-white/8 text-blue-50/78 ${collapsed ? "flex justify-center p-2" : "p-2 text-xs"}`}>
           <div className={`flex items-center gap-2 font-semibold text-white ${collapsed ? "" : "mb-1"}`}><Sparkles className="h-3.5 w-3.5 text-senac-orange" />{!collapsed && "Modo assistido"}</div>
           {!collapsed && <p className="leading-4">Sugestões exigem validação profissional.</p>}

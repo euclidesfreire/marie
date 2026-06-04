@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { ArrowUpRight, FileText } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -26,6 +28,14 @@ export default async function ProtocolsPage() {
                 <Badge tone={toneForStatus(protocol.status)}>{labelFor(protocol.status)}</Badge>
               </div>
               <p className="text-sm text-muted">{protocol.patient.name}</p>
+              <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-3">
+                <Link href={`/patients/${protocol.patientId}/workspace${protocol.appointmentId ? `?appointmentId=${protocol.appointmentId}` : ""}`} className="inline-flex h-9 items-center gap-2 rounded-xl border border-primary bg-primary px-3 text-sm font-medium text-white transition hover:bg-primary-hover">
+                  <ArrowUpRight className="h-4 w-4" />Abrir workspace
+                </Link>
+                <Link href={`/patients/${protocol.patientId}`} className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-white px-3 text-sm font-medium text-foreground transition hover:bg-[#F8FAFD]">
+                  <FileText className="h-4 w-4" />Ver prontuário
+                </Link>
+              </div>
             </Card>
           ))}
           {protocols.length === 0 && <Card className="p-8 text-center text-sm text-muted">Nenhum protocolo registrado.</Card>}

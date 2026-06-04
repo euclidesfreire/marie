@@ -2,6 +2,11 @@ import { z } from "zod";
 
 const optionalText = z.string().trim().optional().nullable();
 
+export const updateUserProfileSchema = z.object({
+  name: z.string().trim().min(2, "Informe o nome profissional."),
+  email: z.string().trim().email("Informe um e-mail válido.")
+});
+
 export const createPatientSchema = z.object({
   name: z.string().trim().min(2),
   birthDate: z.coerce.date(),

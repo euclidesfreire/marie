@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Menu, Stethoscope, UserRound } from "lucide-react";
+import { Menu, Stethoscope } from "lucide-react";
 import type { MarieAction } from "@/lib/ai/marie-client";
 import { Button } from "@/components/ui/button";
 import { CommandSidebar } from "@/components/workspace/command-sidebar";
@@ -13,7 +13,7 @@ import { careTabToStep, getMarieActionTargetStep, stepToCareTab } from "@/lib/ai
 export function MarieWorkspace({ data }: { data: any }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState(() => data.currentAppointment ? stepToCareTab(data.currentAppointment.currentStep) : "Preparação");
-  const [mobileView, setMobileView] = useState<"assistant" | "patient" | "care">("assistant");
+  const [mobileView, setMobileView] = useState<"assistant" | "care">("assistant");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [draftAction, setDraftAction] = useState<MarieAction | null>(null);
@@ -42,12 +42,11 @@ export function MarieWorkspace({ data }: { data: any }) {
           <div className="flex items-center gap-2 border-b border-border bg-white px-3 py-2 shadow-sm">
             <Button size="icon" variant="ghost" onClick={() => setSidebarOpen(true)}><Menu className="h-4 w-4" /></Button>
             <button onClick={() => setMobileView("assistant")} className={`flex-1 rounded-xl px-3 py-2 text-sm font-medium ${mobileView === "assistant" ? "bg-senac-blue text-white" : "text-muted"}`}>Assistente</button>
-            <button onClick={() => setMobileView("patient")} className={`flex-1 rounded-xl px-3 py-2 text-sm font-medium ${mobileView === "patient" ? "bg-senac-blue text-white" : "text-muted"}`}><UserRound className="mr-1 inline h-4 w-4" />Paciente</button>
             <button onClick={() => setMobileView("care")} className={`flex-1 rounded-xl px-3 py-2 text-sm font-medium ${mobileView === "care" ? "bg-senac-blue text-white" : "text-muted"}`}><Stethoscope className="mr-1 inline h-4 w-4" />Atendimento</button>
           </div>
           <div className="min-h-0 flex-1 overflow-hidden">
             {mobileView === "assistant" && <MarieChat data={data} currentStep={activeStep} onApplied={() => router.refresh()} onEditAction={editAction} />}
-            {mobileView !== "assistant" && <PatientCarePanel data={data} activeTab={mobileView === "patient" ? "Preparação" : activeTab} setActiveTab={setActiveTab} draftAction={draftAction} clearDraftAction={() => setDraftAction(null)} mobile />}
+            {mobileView === "care" && <PatientCarePanel data={data} activeTab={activeTab} setActiveTab={setActiveTab} draftAction={draftAction} clearDraftAction={() => setDraftAction(null)} mobile />}
           </div>
         </div>
       </div>

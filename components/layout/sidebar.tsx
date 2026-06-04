@@ -2,15 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, CalendarDays, FileCheck2, HelpCircle, LayoutDashboard, LogOut, Search, Settings, Sparkles, UserPlus, UsersRound } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { CalendarDays, FileCheck2, LayoutDashboard, Search, Settings, Sparkles, UserPlus, UsersRound } from "lucide-react";
 
 const items = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/patients", label: "Pacientes", icon: UsersRound },
-  { href: "/appointments", label: "Atendimentos", icon: CalendarDays },
   { href: "/protocols", label: "Protocolos", icon: FileCheck2 },
-  { href: "/evolutions", label: "Evoluções", icon: Activity },
   { href: "/settings", label: "Configurações", icon: Settings }
 ];
 
@@ -49,9 +46,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </nav>
       <div className="mt-8 space-y-3 border-t border-white/10 pt-6">
         <p className="px-1 text-[11px] font-semibold uppercase tracking-wide text-blue-100/60">Ações rápidas</p>
-        <Button className="h-12 w-full justify-start rounded-xl border-senac-orange bg-senac-orange px-5 text-base font-semibold text-white hover:bg-senac-orange-strong" variant="primary">
+        <Link href="/patients" onClick={onNavigate} className="inline-flex h-12 w-full items-center justify-start gap-3 rounded-xl border border-senac-orange bg-senac-orange px-5 text-base font-semibold text-white hover:bg-senac-orange-strong">
           <CalendarDays className="h-4 w-4" />Novo atendimento
-        </Button>
+        </Link>
         <Link
           href="/patients/new"
           onClick={onNavigate}
@@ -59,17 +56,13 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         >
           <UserPlus className="h-4 w-4" />Novo paciente
         </Link>
-        <Button className="h-12 w-full justify-start rounded-xl border-white/40 bg-white/8 px-5 text-base font-semibold text-blue-50 hover:bg-white/14 hover:text-white">
+        <Link href="/patients" onClick={onNavigate} className="inline-flex h-12 w-full items-center justify-start gap-3 rounded-xl border border-white/40 bg-white/8 px-5 text-base font-semibold text-blue-50 hover:bg-white/14 hover:text-white">
           <Search className="h-4 w-4" />Buscar paciente
-        </Button>
+        </Link>
         <div className="rounded-xl border border-white/10 bg-white/8 p-3 text-xs text-blue-50/78">
           <div className="mb-1 flex items-center gap-2 font-semibold text-white"><Sparkles className="h-3.5 w-3.5 text-senac-orange" />Modo assistido</div>
           <p className="leading-4">Marie apoia, a validação é sempre profissional.</p>
         </div>
-      </div>
-      <div className="mt-auto grid gap-1 border-t border-white/10 pt-3 text-sm">
-        <button className="flex h-8 items-center gap-2 rounded-xl px-2 text-left text-blue-50/70 hover:bg-white/10 hover:text-white"><HelpCircle className="h-4 w-4" />Ajuda</button>
-        <button className="flex h-8 items-center gap-2 rounded-xl px-2 text-left text-blue-50/70 hover:bg-white/10 hover:text-white"><LogOut className="h-4 w-4" />Sair</button>
       </div>
       </div>
     </aside>

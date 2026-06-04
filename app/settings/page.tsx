@@ -1,7 +1,6 @@
 import { AppShell } from "@/components/layout/app-shell";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { ProfileForm } from "@/components/settings/profile-form";
 import { getCurrentUser } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -27,24 +26,11 @@ export default async function SettingsPage() {
               <p className="mt-3 text-sm font-semibold text-dark-accent">{user.name}</p>
               <p className="text-xs text-muted">Clínica de Estética SENAC</p>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="grid gap-1.5 text-sm font-medium text-foreground">Nome<Input defaultValue={user.name} /></label>
-              <label className="grid gap-1.5 text-sm font-medium text-foreground">E-mail<Input defaultValue={user.email} /></label>
-              <label className="grid gap-1.5 text-sm font-medium text-foreground">Telefone<Input placeholder="(00) 00000-0000" /></label>
-              <label className="grid gap-1.5 text-sm font-medium text-foreground">Especialidade<Input placeholder="Estética facial e corporal" /></label>
-              <div className="sm:col-span-2">
-                <Button variant="primary">Salvar alterações</Button>
-              </div>
-            </div>
+            <ProfileForm user={{ name: user.name, email: user.email }} />
           </CardContent>
         </Card>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {["Clínica", "Equipe", "Fluxos", "Segurança", "Notificações"].map((item) => (
-            <Card key={item} className="p-4">
-              <p className="font-semibold text-dark-accent">{item}</p>
-              <p className="mt-1 text-xs text-muted">Configuração visual preparada.</p>
-            </Card>
-          ))}
+        <div className="mt-4 rounded-[14px] border border-border bg-[#F8FAFD] p-4 text-sm text-muted">
+          Outras configurações da clínica e equipe serão disponibilizadas quando houver suporte funcional.
         </div>
       </div>
     </AppShell>
