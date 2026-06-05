@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { labelFor } from "@/lib/labels";
 import { calculateAge, formatDate, getCurrentUser } from "@/lib/utils";
@@ -38,7 +37,19 @@ export default async function DashboardPage() {
     prisma.protocolSuggestion.count({ where: { status: "WAITING_REVIEW" } }),
     prisma.protocol.count({ where: { status: { in: ["DRAFT", "REVIEWED", "APPROVED"] } } }),
     prisma.evolution.count(),
-    prisma.appointment.findMany({ include: { patient: true, professional: true }, orderBy: { date: "desc" }, take: 3 }),
+    prisma.appointment.findMany({
+      select: {
+        id: true,
+        patientId: true,
+        date: true,
+        dailyComplaint: true,
+        status: true,
+        patient: { select: { id: true, name: true, birthDate: true } },
+        professional: { select: { name: true } }
+      },
+      orderBy: { date: "desc" },
+      take: 3
+    }),
     prisma.appointment.findFirst({ where: { status: "IN_PROGRESS" }, include: { patient: true }, orderBy: { date: "asc" } })
   ]);
 
@@ -79,8 +90,12 @@ export default async function DashboardPage() {
                 <p className="mt-4 max-w-md text-2xl font-bold leading-9 text-senac-blue">Marie apoia a análise. O profissional valida.</p>
                 <p className="mt-6 max-w-md text-base leading-7 text-muted">Organize atendimentos, revise planos de cuidado e acompanhe a evolução clínica com apoio assistido, mantendo a decisão sempre nas mãos da profissional.</p>
                 <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                  <Button variant="primary" className="bg-senac-blue hover:bg-primary-hover"><Link href="/patients">Abrir workspace</Link></Button>
-                  <Button variant="accent"><Link href="/patients/new">Novo atendimento</Link></Button>
+                  <Link href="/patients" className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-senac-blue bg-senac-blue px-4 text-sm font-medium text-white shadow-sm transition hover:bg-primary-hover">
+                    Abrir workspace
+                  </Link>
+                  <Link href="/patients/new" className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-senac-orange bg-senac-orange px-4 text-sm font-medium text-white shadow-sm transition hover:bg-senac-orange-strong">
+                    Novo atendimento
+                  </Link>
                 </div>
                 <p className="mt-5 rounded-full border border-blue-100 bg-white/70 px-3 py-2 text-xs font-semibold text-senac-blue">Atendimento estético assistido, com validação profissional em cada etapa.</p>
               </div>
@@ -133,21 +148,25 @@ export default async function DashboardPage() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {recentAppointments.map((appointment) => (
-                    <tr key={appointment.id} className="bg-white">
+                    <tr key={appointment.id} className="group bg-white transition hover:bg-[#F8FAFD]">
                       <td className="px-5 py-4">
-                        <div className="flex items-center gap-3">
+                        <Link href={`/patients/${appointment.patientId}/workspace?appointmentId=${appointment.id}`} className="flex items-center gap-3">
                           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-senac-blue">{appointment.patient.name.slice(0, 2).toUpperCase()}</span>
                           <span>
                             <span className="block font-semibold text-dark-accent">{appointment.patient.name}</span>
                             <span className="text-xs text-muted">{calculateAge(appointment.patient.birthDate)} anos</span>
                           </span>
-                        </div>
+                        </Link>
                       </td>
                       <td className="px-5 py-4 text-muted">{appointment.dailyComplaint ?? "Avaliação estética"}</td>
                       <td className="px-5 py-4 text-muted">{appointment.professional.name}</td>
                       <td className="px-5 py-4 text-muted">{formatDate(appointment.date)}</td>
                       <td className="px-5 py-4"><Badge tone={statusTone(appointment.status)}>{labelFor(appointment.status)}</Badge></td>
-                      <td className="px-5 py-4"><ChevronRight className="h-4 w-4 text-muted" /></td>
+                      <td className="px-5 py-4">
+                        <Link href={`/patients/${appointment.patientId}/workspace?appointmentId=${appointment.id}`} aria-label={`Abrir workspace de ${appointment.patient.name}`}>
+                          <ChevronRight className="h-4 w-4 text-muted transition group-hover:translate-x-0.5 group-hover:text-primary" />
+                        </Link>
+                      </td>
                     </tr>
                   ))}
                   {recentAppointments.length === 0 && (
@@ -177,7 +196,7 @@ export default async function DashboardPage() {
               </div>
             </div>
             <h3 className="mt-6 text-sm font-bold text-senac-blue">Próximo atendimento</h3>
-            <div className="mt-3 flex items-center justify-between rounded-[14px] border border-border bg-white p-4 shadow-soft">
+            <Link href={nextAppointment ? `/patients/${nextAppointment.patientId}/workspace?appointmentId=${nextAppointment.id}` : "/patients"} className="mt-3 flex items-center justify-between rounded-[14px] border border-border bg-white p-4 shadow-soft transition hover:border-blue-200 hover:bg-[#F8FAFD]">
               <div className="flex items-center gap-3">
                 <span className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-senac-blue">{nextAppointment?.patient.name.slice(0, 2).toUpperCase() ?? "MA"}</span>
                 <div>
@@ -186,7 +205,7 @@ export default async function DashboardPage() {
                 </div>
               </div>
               <ChevronRight className="h-4 w-4 text-muted" />
-            </div>
+            </Link>
           </Card>
 
           <Card className="p-5">

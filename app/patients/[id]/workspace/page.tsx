@@ -6,39 +6,43 @@ import { getCurrentUser } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
+const appointmentInclude = {
+  assessment: true,
+  execution: true,
+  stepStates: { orderBy: { createdAt: "asc" as const } },
+  followUps: { orderBy: { date: "desc" as const } },
+  marieSuggestions: { orderBy: { createdAt: "desc" as const } },
+  suggestions: true,
+  protocols: { include: { steps: { orderBy: { order: "asc" as const } } } },
+  evolutions: true
+};
+
 export default async function PatientWorkspacePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ appointmentId?: string }> }) {
   const { id } = await params;
   const { appointmentId } = await searchParams;
+
   const patient = await prisma.patient.findUnique({
     where: { id },
     include: {
-      anamneses: { orderBy: { createdAt: "desc" } },
-      appointments: {
-        orderBy: { date: "desc" },
-        include: {
-          assessment: true,
-          execution: true,
-          stepStates: { orderBy: { createdAt: "asc" } },
-          followUps: { orderBy: { date: "desc" } },
-          marieSuggestions: { orderBy: { createdAt: "desc" } },
-          suggestions: true,
-          protocols: { include: { steps: { orderBy: { order: "asc" } } } },
-          evolutions: true
-        }
-      },
-      suggestions: { orderBy: { createdAt: "desc" }, include: { validation: true, adjustments: true } },
-      protocols: { orderBy: { createdAt: "desc" }, include: { steps: { orderBy: { order: "asc" } } } },
-      evolutions: { orderBy: { createdAt: "desc" } },
-      clinicalNotes: { orderBy: { createdAt: "desc" } }
+      anamneses: { orderBy: { createdAt: "desc" }, take: 3 },
+      suggestions: { orderBy: { createdAt: "desc" }, take: 8, include: { validation: true, adjustments: true } },
+      protocols: { orderBy: { createdAt: "desc" }, take: 8, include: { steps: { orderBy: { order: "asc" } } } },
+      evolutions: { orderBy: { createdAt: "desc" }, take: 12 },
+      clinicalNotes: { orderBy: { createdAt: "desc" }, take: 10 }
     }
   });
   if (!patient) notFound();
-  const currentAppointment =
-    patient.appointments.find((appointment) => appointment.id === appointmentId) ??
-    patient.appointments.find((appointment) => appointment.status === "IN_PROGRESS") ??
-    patient.appointments[0] ??
-    null;
-  const user = await getCurrentUser();
+
+  const [currentAppointment, user] = await Promise.all([
+    appointmentId
+      ? prisma.appointment.findFirst({ where: { id: appointmentId, patientId: id }, include: appointmentInclude })
+      : prisma.appointment.findFirst({
+          where: { patientId: id, status: { in: ["IN_PROGRESS", "REOPENED"] } },
+          include: appointmentInclude,
+          orderBy: { date: "desc" }
+        }).then((appointment) => appointment ?? prisma.appointment.findFirst({ where: { patientId: id }, include: appointmentInclude, orderBy: { date: "desc" } })),
+    getCurrentUser()
+  ]);
 
   return (
     <div className="min-h-screen bg-background">
