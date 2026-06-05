@@ -17,6 +17,8 @@ export function Topbar({
   professional?: string;
   onMenuClick?: () => void;
 }) {
+  const isWorkspace = context?.toLowerCase().includes("workspace do paciente");
+
   return (
     <header className="grid h-16 grid-cols-[1fr_auto_1fr] items-center border-b border-border bg-white/95 px-4 shadow-[0_1px_10px_rgba(15,23,42,0.03)] backdrop-blur md:px-6">
       <div className="flex items-center gap-2">
@@ -38,7 +40,12 @@ export function Topbar({
               <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-senac-orange text-[9px] font-bold text-white">3</span>
             </button>
             <div className="flex items-center gap-2 text-xs text-muted">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-senac-blue text-sm font-semibold text-white shadow-sm">
+              {isWorkspace && (
+                <span className="rounded-full bg-senac-blue px-3 py-2 text-xs font-semibold text-white shadow-sm sm:hidden">
+                  Workspace do paciente
+                </span>
+              )}
+              <span className={`${isWorkspace ? "hidden sm:flex" : "flex"} h-10 w-10 items-center justify-center rounded-full bg-senac-blue text-sm font-semibold text-white shadow-sm`}>
                 {professional.slice(0, 1)}
               </span>
               <span className="hidden leading-4 sm:inline">

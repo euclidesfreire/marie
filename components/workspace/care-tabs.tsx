@@ -282,6 +282,14 @@ function AccordionSection({ title, description, children }: { title: string; des
   );
 }
 
+function MobileFormActionBar({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="shrink-0 border-t border-border bg-white px-3 py-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-8px_22px_rgba(10,61,145,0.08)] sm:hidden">
+      <div className="flex flex-wrap gap-2">{children}</div>
+    </div>
+  );
+}
+
 export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraftAction }: CareTabsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -476,10 +484,65 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
     );
   }
 
+  function MobileActions() {
+    if (activeTab === "Anamnese") {
+      return (
+        <MobileFormActionBar>
+          <Button form="anamnesis-form" name="intent" value="draft" size="sm" disabled={isPending}><Save className="h-4 w-4" />Salvar</Button>
+          <Button form="anamnesis-form" name="intent" value="advance" size="sm" variant="primary" disabled={isPending}><Save className="h-4 w-4" />Salvar e avançar</Button>
+        </MobileFormActionBar>
+      );
+    }
+
+    if (activeTab === "Plano de cuidado") {
+      if (editingProtocol || !protocol || draftPayload.title || draftPayload.objective || draftPayload.indication || draftPayload.postProcedureCare) {
+        return (
+          <MobileFormActionBar>
+            <Button form="protocol-form" size="sm" variant="primary" disabled={isPending}><Save className="h-4 w-4" />Salvar plano</Button>
+          </MobileFormActionBar>
+        );
+      }
+      return (
+        <MobileFormActionBar>
+          <Button size="sm" onClick={() => setEditingProtocol(true)}><Pencil className="h-4 w-4" />Editar</Button>
+          <Button size="sm" variant="primary" onClick={() => run(async () => submit(`/api/protocols/${protocol.id}`, "PUT", { status: "APPLIED" }, "Protocolo aplicado. Próxima etapa: execução."))}>Aplicar</Button>
+        </MobileFormActionBar>
+      );
+    }
+
+    if (activeTab === "Execução") {
+      return (
+        <MobileFormActionBar>
+          <Button form="execution-form" size="sm" variant="primary" disabled={isPending}><Save className="h-4 w-4" />Salvar execução</Button>
+        </MobileFormActionBar>
+      );
+    }
+
+    if (activeTab === "Evolução") {
+      return (
+        <MobileFormActionBar>
+          <Button form="evolution-form" size="sm" variant="primary" disabled={isPending}><Save className="h-4 w-4" />Salvar evolução</Button>
+          {appointment?.status !== "FINISHED" && <Button type="button" size="sm" variant="success" onClick={() => run(async () => finishAppointment())}>Finalizar</Button>}
+        </MobileFormActionBar>
+      );
+    }
+
+    if (activeTab === "Finalização") {
+      return (
+        <MobileFormActionBar>
+          {appointment?.status !== "FINISHED" && <Button size="sm" variant="success" onClick={() => run(async () => finishAppointment(true))}>Finalizar</Button>}
+          {appointment?.status === "FINISHED" && <Button size="sm" onClick={() => run(async () => chooseStep("ANAMNESIS"))}><RotateCcw className="h-4 w-4" />Reabrir</Button>}
+        </MobileFormActionBar>
+      );
+    }
+
+    return null;
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <Stepper />
-      <div className="min-h-0 flex-1 overflow-y-auto bg-[#F8FAFD] p-3.5 pb-28 2xl:p-4">
+      <div className="min-h-0 flex-1 overflow-y-auto bg-[#F8FAFD] p-3.5 pb-8 sm:pb-3.5 2xl:p-4">
         {message && <p className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">{message}</p>}
 
         {activeTab === "Preparação" && (
@@ -493,7 +556,7 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
 
         {activeTab === "Anamnese" && (
           <StepForm title="Anamnese inicial" description="Registre os dados essenciais do atendimento. A Marie pode sugerir perguntas e pontos de atenção, mas o registro é profissional.">
-            <form key={`anamnesis-${draftAction?.id ?? "base"}`} className="space-y-4" onSubmit={(event) => {
+            <form id="anamnesis-form" key={`anamnesis-${draftAction?.id ?? "base"}`} className="space-y-4" onSubmit={(event) => {
               event.preventDefault();
               const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
               const shouldAdvance = submitter?.value !== "draft";
@@ -584,7 +647,7 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
                 <TextField label="Observações técnicas" name="technicalNotes" value={draftPayload.technicalNotes ?? assessment?.technicalNotes} textarea />
               </AccordionSection>
 
-              <div className="sticky bottom-0 z-20 -mx-4 flex flex-wrap gap-2 border-t border-border bg-white px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:bg-transparent sm:px-0 sm:py-0 sm:pt-3">
+              <div className="hidden flex-wrap gap-2 border-t border-border pt-3 sm:flex">
                 <Button name="intent" value="draft" size="sm" disabled={isPending}><Save className="h-4 w-4" />Salvar rascunho</Button>
                 <Button name="intent" value="advance" size="sm" variant="primary" disabled={isPending}><Save className="h-4 w-4" />Salvar e avançar</Button>
               </div>
@@ -612,13 +675,14 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
               run={run}
               submit={submit}
               duplicateProtocol={duplicateProtocol}
+              protocolFormId="protocol-form"
             />
           </div>
         )}
 
         {activeTab === "Execução" && (
           <StepForm title="Execução" description="Registre procedimento, produtos, parâmetros e intercorrências. Alterações aqui podem exigir revisão da evolução.">
-            <form key={`execution-${draftAction?.id ?? "base"}`} className="space-y-3" onSubmit={(event) => {
+            <form id="execution-form" key={`execution-${draftAction?.id ?? "base"}`} className="space-y-3" onSubmit={(event) => {
               event.preventDefault();
               if (!appointment) return;
               run(async () => {
@@ -633,7 +697,7 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
               <TextField label="Observações profissionais" name="professionalNotes" value={draftPayload.professionalNotes ?? execution?.professionalNotes} textarea />
               <TextField label="Intercorrências" name="incidents" value={draftPayload.incidents ?? execution?.incidents} textarea />
               <TextField label="Cuidados pós-procedimento entregues" name="postCareGiven" value={draftPayload.postCareGiven ?? execution?.postCareGiven} textarea />
-              <div className="sticky bottom-0 z-20 -mx-4 border-t border-border bg-white px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
+              <div className="hidden sm:block">
                 <Button size="sm" variant="primary" disabled={isPending}><Save className="h-4 w-4" />Salvar execução</Button>
               </div>
             </form>
@@ -642,7 +706,7 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
 
         {activeTab === "Evolução" && (
           <StepForm title="Evolução" description="Registre resposta clínica, ajustes e próximos passos.">
-            <form key={`evolution-${draftAction?.id ?? "base"}`} className="space-y-3" onSubmit={(event) => {
+            <form id="evolution-form" key={`evolution-${draftAction?.id ?? "base"}`} className="space-y-3" onSubmit={(event) => {
               event.preventDefault();
               run(async () => submit(`/api/patients/${patient.id}/evolutions`, "POST", { ...formObject(new FormData(event.currentTarget)), appointmentId: appointment?.id ?? null }, "Evolução registrada."));
             }}>
@@ -652,7 +716,7 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
               <TextField label="Ajustes realizados" name="adjustmentsMade" value={draftPayload.adjustmentsMade} textarea />
               <TextField label="Próximos passos" name="nextSteps" value={draftPayload.nextSteps} textarea />
               <TextField label="Data de retorno" name="returnDate" value={draftPayload.returnDate} type="date" />
-              <div className="sticky bottom-0 z-20 -mx-4 flex flex-wrap gap-2 border-t border-border bg-white px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
+              <div className="hidden flex-wrap gap-2 sm:flex">
                 <Button size="sm" variant="primary" disabled={isPending}><Save className="h-4 w-4" />Salvar evolução</Button>
                 {appointment?.status !== "FINISHED" && <Button type="button" size="sm" variant="success" onClick={() => run(async () => finishAppointment())}>Finalizar atendimento</Button>}
               </div>
@@ -682,6 +746,7 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
           </div>
         )}
       </div>
+      <MobileActions />
     </div>
   );
 }
@@ -696,7 +761,7 @@ function StepForm({ title, description, children }: { title: string; description
 }
 
 function CarePlanSection(props: any) {
-  const { appointment, patient, suggestion, protocol, marieSuggestions, draftPayload, editingSuggestion, setEditingSuggestion, showSuggestionForm, setShowSuggestionForm, editingProtocol, setEditingProtocol, isPending, run, submit, duplicateProtocol } = props;
+  const { appointment, patient, suggestion, protocol, marieSuggestions, draftPayload, editingSuggestion, setEditingSuggestion, showSuggestionForm, setShowSuggestionForm, editingProtocol, setEditingProtocol, isPending, run, submit, duplicateProtocol, protocolFormId } = props;
   const hasDraftPlan = Boolean(draftPayload.title || draftPayload.objective || draftPayload.indication || draftPayload.postProcedureCare);
   return (
     <div className="space-y-4">
@@ -709,7 +774,7 @@ function CarePlanSection(props: any) {
           {protocol && <Button size="sm" onClick={() => setEditingProtocol((value: boolean) => !value)}><Pencil className="h-4 w-4" />Editar</Button>}
         </div>
         {(editingProtocol || !protocol || hasDraftPlan) ? (
-          <ProtocolForm draftPayload={draftPayload} protocol={protocol} suggestion={suggestion} appointment={appointment} patient={patient} disabled={isPending} onSubmit={(payload: Record<string, unknown>) => run(async () => {
+          <ProtocolForm formId={protocolFormId} draftPayload={draftPayload} protocol={protocol} suggestion={suggestion} appointment={appointment} patient={patient} disabled={isPending} onSubmit={(payload: Record<string, unknown>) => run(async () => {
             await submit(protocol ? `/api/protocols/${protocol.id}` : `/api/patients/${patient.id}/protocols`, protocol ? "PUT" : "POST", payload, "Plano de cuidado salvo.");
             setEditingProtocol(false);
           })} />
@@ -806,9 +871,9 @@ function SuggestionForm({ draftPayload, editingSuggestion, appointment, isAi, di
   );
 }
 
-function ProtocolForm({ draftPayload = {}, protocol, suggestion, appointment, disabled, onSubmit }: any) {
+function ProtocolForm({ formId, draftPayload = {}, protocol, suggestion, appointment, disabled, onSubmit }: any) {
   return (
-    <form key={`protocol-${draftPayload.title ?? protocol?.id ?? "base"}`} className="space-y-3" onSubmit={(event) => {
+    <form id={formId} key={`protocol-${draftPayload.title ?? protocol?.id ?? "base"}`} className="space-y-3" onSubmit={(event) => {
       event.preventDefault();
       onSubmit({ ...formObject(new FormData(event.currentTarget)), appointmentId: appointment?.id ?? null });
     }}>
@@ -819,7 +884,9 @@ function ProtocolForm({ draftPayload = {}, protocol, suggestion, appointment, di
       <TextField label="Cuidados pós-procedimento" name="postProcedureCare" value={draftPayload.postProcedureCare ?? protocol?.postProcedureCare ?? suggestion?.warnings} textarea />
       <input type="hidden" name="source" value={draftPayload.source ?? protocol?.source ?? "AI_ASSISTED"} />
       <input type="hidden" name="status" value={draftPayload.status ?? protocol?.status ?? "DRAFT"} />
-      <Button size="sm" variant="primary" disabled={disabled}><Save className="h-4 w-4" />Salvar plano</Button>
+      <div className="hidden sm:block">
+        <Button size="sm" variant="primary" disabled={disabled}><Save className="h-4 w-4" />Salvar plano</Button>
+      </div>
     </form>
   );
 }
