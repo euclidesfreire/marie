@@ -5,6 +5,7 @@ import { Bot, CalendarDays, Check, ClipboardList, Clock3, Leaf, Mic, Paperclip, 
 import type { LucideIcon } from "lucide-react";
 import type { MarieAction } from "@/lib/ai/marie-client";
 import { sendMessageToMarie } from "@/lib/ai/marie-client";
+import { getWorkflowQuickActionsForStep, type WorkflowQuickAction } from "@/lib/ai/marie-workflow-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,35 +17,29 @@ type ChatMessage = {
   role: "USER" | "ASSISTANT" | "SYSTEM";
   content: string;
   actions?: (MarieAction & { localStatus?: "pending" | "applied" | "canceled" })[];
+  quickActions?: WorkflowQuickAction[];
 };
 
-const marieStepMocks: Record<string, { quickActions: string[]; defaultMessage: string }> = {
+const marieStepHints: Record<string, { defaultMessage: string }> = {
   PREPARATION: {
-    quickActions: ["Revisar histórico do paciente", "Sugerir perguntas complementares", "Iniciar atendimento"],
     defaultMessage: "Posso organizar o contexto inicial e preparar o atendimento."
   },
   ANAMNESIS: {
-    quickActions: ["Revisar anamnese", "Identificar contraindicações", "Apoiar avaliação inicial", "Sugerir pontos de atenção", "Sugerir perguntas complementares", "Resumir histórico"],
     defaultMessage: "Posso revisar a anamnese, apoiar a avaliação estética inicial e apontar riscos para o plano."
   },
   ASSESSMENT: {
-    quickActions: ["Revisar anamnese", "Apoiar avaliação inicial", "Comparar dados", "Revisar riscos"],
     defaultMessage: "A avaliação agora fica integrada à Anamnese, mantendo área avaliada e pontos técnicos."
   },
   CARE_PLAN: {
-    quickActions: ["Sugerir plano de cuidado", "Ajustar plano", "Revisar contraindicações", "Gerar cuidados pós"],
     defaultMessage: "Posso sugerir um plano de cuidado para revisão profissional."
   },
   EXECUTION: {
-    quickActions: ["Registrar execução", "Revisar parâmetros", "Gerar orientação", "Registrar intercorrência"],
     defaultMessage: "Posso ajudar a registrar o que foi executado e as orientações dadas ao paciente."
   },
   EVOLUTION: {
-    quickActions: ["Criar evolução", "Resumir evolução", "Sugerir próximos passos", "Preparar retorno"],
     defaultMessage: "Posso ajudar a escrever a evolução clínica e sugerir próximos passos."
   },
   COMPLETION: {
-    quickActions: ["Revisar pendências", "Gerar resumo final", "Preparar retorno", "Finalizar atendimento"],
     defaultMessage: "Posso revisar pendências e preparar um resumo final do atendimento."
   }
 };
@@ -128,8 +123,8 @@ export function MarieChat({
     protocols: data.patient.protocols ?? [],
     evolutions: data.patient.evolutions ?? []
   }), [currentStep, data]);
-  const stepMock = marieStepMocks[currentStep] ?? marieStepMocks.ANAMNESIS;
-  const quickCommands = stepMock.quickActions;
+  const stepHint = marieStepHints[currentStep] ?? marieStepHints.ANAMNESIS;
+  const quickActions = getWorkflowQuickActionsForStep(currentStep, data.currentAppointment?.status);
 
   async function send(command = text) {
     if (!command.trim()) return;
@@ -143,7 +138,8 @@ export function MarieChat({
         id: crypto.randomUUID(),
         role: "ASSISTANT",
         content: response.message,
-        actions: response.actions?.map((action) => ({ ...action, localStatus: "pending" }))
+        actions: response.actions?.map((action) => ({ ...action, localStatus: "pending" })),
+        quickActions: response.quickActions
       }
     ]);
   }
@@ -181,45 +177,53 @@ export function MarieChat({
     });
   }
 
+  function QuickActionChips({ actions, className = "" }: { actions: WorkflowQuickAction[]; className?: string }) {
+    return (
+      <div className={`flex gap-2 overflow-x-auto pb-1 ${className}`}>
+        {actions.map((item) => {
+          const visual = visualForCommand(item.label);
+          return (
+            <button
+              key={item.id}
+              type="button"
+              title={item.disabledReason ?? item.label}
+              className="group flex h-9 shrink-0 items-center gap-2 rounded-full border border-border bg-white px-3 text-left text-xs font-semibold text-senac-blue shadow-sm transition hover:border-blue-200 hover:bg-senac-blue-soft disabled:pointer-events-none disabled:opacity-50"
+              onClick={() => send(item.label)}
+              disabled={isPending || item.disabled}
+            >
+              <visual.icon className="h-4 w-4 text-primary group-hover:text-senac-orange" />
+              <span className="whitespace-nowrap">{item.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
-    <section className="flex h-full min-h-0 flex-col bg-white">
-      <div className="shrink-0 border-b border-border bg-white px-4 py-4 shadow-sm sm:px-6 lg:px-8 lg:py-5">
+    <section className="flex h-full min-h-0 flex-col bg-white lg:h-full">
+      <div className="shrink-0 border-b border-border bg-white px-3 py-2 shadow-sm sm:px-6 sm:py-4 lg:px-8 lg:py-5">
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight text-senac-blue">Assistente Marie</h1>
+              <h1 className="text-lg font-bold tracking-tight text-senac-blue sm:text-2xl">Assistente Marie</h1>
               <Sparkles className="h-4 w-4 text-senac-orange" />
             </div>
-            <p className="mt-2 text-sm text-muted">Etapa atual: <span className="font-semibold text-primary">{labelFor(currentStep)}</span></p>
+            <p className="mt-1 text-xs text-muted sm:mt-2 sm:text-sm">Etapa atual: <span className="font-semibold text-primary">{labelFor(currentStep)}</span></p>
+            <p className="mt-0.5 text-xs text-muted sm:hidden">{data.patient.name}</p>
           </div>
-          <Badge tone="blue">Assistido</Badge>
+          <span className="hidden sm:inline-flex"><Badge tone="blue">Assistido</Badge></span>
         </div>
-        <div className="mt-3 flex items-center justify-between rounded-xl border border-blue-100 bg-blue-50/70 px-3 py-2 text-xs leading-5 text-senac-blue lg:px-4">
-          <span className="flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 shrink-0" />{stepMock.defaultMessage}</span>
+        <div className="mt-2 hidden items-center justify-between rounded-xl border border-blue-100 bg-blue-50/70 px-3 py-2 text-xs leading-5 text-senac-blue sm:flex lg:px-4">
+          <span className="flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 shrink-0" />{stepHint.defaultMessage}</span>
         </div>
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-          {quickCommands.map((command) => {
-            const visual = visualForCommand(command);
-            return (
-              <button
-                key={command}
-                type="button"
-                className="group flex h-10 shrink-0 items-center gap-2 rounded-full border border-border bg-white px-3 text-left text-xs font-semibold text-senac-blue shadow-sm transition hover:border-blue-200 hover:bg-senac-blue-soft disabled:pointer-events-none disabled:opacity-60"
-                onClick={() => send(command)}
-                disabled={isPending}
-              >
-                <visual.icon className="h-4 w-4 text-primary group-hover:text-senac-orange" />
-                <span className="whitespace-nowrap">{command}</span>
-              </button>
-            );
-          })}
-        </div>
+        <QuickActionChips actions={quickActions} className="mt-3 hidden sm:flex" />
         <div className="mt-2 hidden gap-1.5 2xl:flex">
           {compactTips.map((tip) => <span key={tip} className="rounded-full border border-border bg-[#F8FAFD] px-2 py-1 text-[11px] text-muted">{tip}</span>)}
         </div>
       </div>
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
-        <div className="rounded-[14px] border border-border bg-white p-5 shadow-soft">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-[#F8FAFD] px-3 py-3 pb-6 sm:space-y-4 sm:bg-white sm:px-6 sm:py-4 lg:px-8 lg:py-6">
+        <div className="hidden rounded-[14px] border border-border bg-white p-5 shadow-soft sm:block">
           <div className="mb-3 flex items-center justify-between gap-2 text-sm font-bold text-senac-blue"><span className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-primary" />Histórico recente</span><span className="text-muted">›</span></div>
           <div className="grid gap-2 text-sm text-muted">
             <p className="truncate">Paciente: <span className="font-medium text-foreground">{data.patient.name}</span></p>
@@ -228,11 +232,14 @@ export function MarieChat({
           </div>
         </div>
         {messages.map((message) => (
-          <div key={message.id} className={message.role === "USER" ? "ml-auto max-w-[82%]" : "mr-auto max-w-[72%]"}>
-            <div className={`rounded-[14px] border p-5 text-sm shadow-soft ${message.role === "USER" ? "border-blue-200 bg-primary text-white" : message.role === "SYSTEM" ? "border-green-200 bg-green-50 text-green-800" : "border-border bg-white text-foreground border-l-4 border-l-senac-orange"}`}>
+          <div key={message.id} className={message.role === "USER" ? "ml-auto max-w-[86%] sm:max-w-[82%]" : "mr-auto max-w-[88%] sm:max-w-[72%]"}>
+            <div className={`rounded-[14px] border p-3 text-sm shadow-soft sm:p-5 ${message.role === "USER" ? "border-blue-200 bg-primary text-white" : message.role === "SYSTEM" ? "border-green-200 bg-green-50 text-green-800" : "border-border bg-white text-foreground sm:border-l-4 sm:border-l-senac-orange"}`}>
               {message.role === "ASSISTANT" && <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted"><Bot className="h-3.5 w-3.5" />Marie</div>}
               <p className="whitespace-pre-line leading-6">{message.content}</p>
             </div>
+            {message.quickActions && message.quickActions.length > 0 && (
+              <QuickActionChips actions={message.quickActions.filter((item) => !item.disabled).slice(0, 4)} className="mt-2" />
+            )}
             {message.actions?.map((action) => (
               <div key={action.id} className="mt-2 rounded-[14px] border border-border bg-white p-3 shadow-soft">
                 <div className="mb-2 flex items-start justify-between gap-3">
@@ -263,14 +270,17 @@ export function MarieChat({
           </div>
         ))}
       </div>
+      <div className="shrink-0 border-t border-border bg-white px-3 py-2 sm:hidden">
+        <QuickActionChips actions={quickActions} />
+      </div>
       <form
-        className="shrink-0 border-t border-border bg-white px-4 py-3 shadow-[0_-8px_24px_rgba(10,61,145,0.05)] sm:px-6 lg:px-8"
+        className="sticky bottom-0 z-20 shrink-0 border-t border-border bg-white px-3 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(10,61,145,0.05)] sm:px-6 sm:py-3 lg:px-8"
         onSubmit={(event) => {
           event.preventDefault();
           void send();
         }}
       >
-        <div className="flex items-center gap-2 rounded-[14px] border border-border bg-white p-2 shadow-soft sm:gap-3 sm:p-3">
+        <div className="flex items-end gap-2 rounded-[14px] border border-border bg-white p-2 shadow-soft sm:items-center sm:gap-3 sm:p-3">
           <Textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="Digite um comando para a Marie..." className="min-h-10 flex-1 resize-none border-0 shadow-none focus:ring-0" />
           <Button type="button" size="icon" variant="ghost" className="hidden shrink-0 sm:inline-flex"><Paperclip className="h-4 w-4" /></Button>
           <Button type="button" size="icon" variant="ghost" className="hidden shrink-0 sm:inline-flex"><Mic className="h-4 w-4" /></Button>

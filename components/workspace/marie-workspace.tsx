@@ -26,7 +26,7 @@ export function MarieWorkspace({ data }: { data: any }) {
   }
 
   return (
-    <div className="h-[calc(100vh-64px)] overflow-hidden bg-background">
+    <div className="h-[calc(100dvh-64px)] overflow-hidden bg-background">
       <div className="flex h-full min-h-0 overflow-hidden">
         <div className={`hidden h-full shrink-0 transition-[width] duration-200 lg:block ${sidebarCollapsed ? "w-[72px]" : "w-[300px]"}`}>
           <CommandSidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((value) => !value)} />

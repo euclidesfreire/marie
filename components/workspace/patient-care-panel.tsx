@@ -21,7 +21,9 @@ export function PatientCarePanel({
 }) {
   return (
     <aside className={`flex h-full min-h-0 flex-col bg-white ${mobile ? "" : "border-l border-border"}`}>
-      <PatientSummaryCard patient={data.patient} appointment={data.currentAppointment} />
+      <div className={mobile ? "shrink-0" : ""}>
+        <PatientSummaryCard patient={data.patient} appointment={data.currentAppointment} compact={mobile} />
+      </div>
       <CareTabs data={data} activeTab={activeTab} setActiveTab={setActiveTab} draftAction={draftAction} clearDraftAction={clearDraftAction} />
     </aside>
   );

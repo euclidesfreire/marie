@@ -9,6 +9,7 @@ import type {
 } from "@prisma/client";
 import { analyzeMarieScenario, buildMarieResponseFromScenario } from "@/lib/ai/marie-step-advisor";
 import type { MarieProtocolKey } from "@/lib/ai/marie-knowledge-base";
+import type { WorkflowQuickAction } from "@/lib/ai/marie-workflow-actions";
 
 export type MarieActionType =
   | "CREATE_PROTOCOL_SUGGESTION"
@@ -54,6 +55,7 @@ export type MarieResponse = {
   suggestedProtocol?: unknown;
   warnings?: string[];
   actions?: MarieAction[];
+  quickActions?: WorkflowQuickAction[];
 };
 
 export async function sendMessageToMarie(payload: MarieContextPayload): Promise<MarieResponse> {

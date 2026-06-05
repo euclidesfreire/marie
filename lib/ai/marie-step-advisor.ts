@@ -12,6 +12,7 @@ import { getProtocolByKey, getTreatmentConcernOption } from "@/lib/ai/marie-know
 import { buildDynamicProtocolPayload, buildProcedurePlan } from "@/lib/ai/marie-protocol-builder";
 import { detectMarieRisks, detectSafetyProfile } from "@/lib/ai/marie-risk-engine";
 import type { MarieCommandGoal, MarieContextSummary, MarieScenario } from "@/lib/ai/marie-scenario-types";
+import { getWorkflowQuickActionsForStep, type WorkflowQuickAction } from "@/lib/ai/marie-workflow-actions";
 
 export type { MarieScenario } from "@/lib/ai/marie-scenario-types";
 
@@ -26,6 +27,19 @@ function includesAny(text: string, terms: string[]) {
   return terms.some((term) => text.includes(normalizeMarieText(term)));
 }
 
+function stepLabel(step: string) {
+  const labels: Record<string, string> = {
+    PREPARATION: "Preparação",
+    ANAMNESIS: "Anamnese",
+    ASSESSMENT: "Anamnese",
+    CARE_PLAN: "Plano de cuidado",
+    EXECUTION: "Execução",
+    EVOLUTION: "Evolução",
+    COMPLETION: "Finalização"
+  };
+  return labels[step] ?? "Anamnese";
+}
+
 function sentenceList(items: string[]) {
   if (items.length === 0) return "";
   if (items.length === 1) return items[0];
@@ -34,6 +48,126 @@ function sentenceList(items: string[]) {
 
 function action(type: MarieAction["type"], title: string, description: string, payload: unknown): MarieAction {
   return { id: actionId(), type, title, description, payload, requiresConfirmation: true };
+}
+
+function visibleQuickActions(summary: MarieContextSummary): WorkflowQuickAction[] {
+  return getWorkflowQuickActionsForStep(summary.step, summary.appointmentStatus).filter((item) => !item.disabled);
+}
+
+function quickActionText(summary: MarieContextSummary, limit = 4) {
+  const actions = visibleQuickActions(summary).slice(0, limit);
+  if (!actions.length) return "";
+  return `Você pode escolher uma opção ou digitar normalmente: ${actions.map((item) => `[${item.label}]`).join(" ")}`;
+}
+
+function nextMissingData(summary: MarieContextSummary, missingFields: string[]) {
+  if (!summary.explicitArea) return "área avaliada";
+  if (!summary.selectedTreatmentConcern) return "indicação principal";
+  if (!summary.selectedFinding) return "achado principal";
+  if (missingFields.includes("queixa principal")) return "detalhes da queixa relatada";
+  if (missingFields.includes("contraindicações")) return "restrições ou contraindicações";
+  if (missingFields.includes("objetivo do tratamento")) return "objetivo do atendimento";
+  return missingFields[0] ?? "";
+}
+
+function hasMinimumProtocolData(summary: MarieContextSummary, missingFields: string[], context: MarieContextPayload) {
+  const hasArea = Boolean(summary.explicitArea || summary.area);
+  const hasStructuredDirection = Boolean(summary.selectedTreatmentConcern && summary.selectedFinding);
+  const hasLegacyDirection = Boolean(summary.chiefComplaint || summary.freeTextComplaint || summary.assessmentText);
+  const hasContraindicationReview = Boolean(
+    context.anamnesis?.contraindications
+    || context.assessment?.structuredContraindications
+    || summary.structuredContraindications
+  );
+  return hasArea && (hasStructuredDirection || hasLegacyDirection) && (!missingFields.includes("contraindicações") || hasContraindicationReview);
+}
+
+function classifySimpleCommand(summary: MarieContextSummary) {
+  const command = summary.normalizedCommand.trim();
+  if (!command) return "empty";
+  const compact = command.replace(/[.!?,'"]/g, "").trim();
+  if (["oi", "ola", "olá", "bom dia", "boa tarde", "boa noite", "tudo bem", "tudo bem?"].includes(compact)) return "greeting";
+  if (includesAny(command, ["me ajuda", "nao entendi", "não entendi", "nao sei o que fazer", "não sei o que fazer", "o que faco agora", "o que faço agora", "qual a proxima etapa", "qual a próxima etapa"])) return "help";
+  if (includesAny(command, ["pode continuar", "avancar", "avançar", "proxima etapa", "próxima etapa"])) return "advance";
+  if (includesAny(command, ["voltar", "etapa anterior", "retornar"])) return "back";
+  if (includesAny(command, ["revisar anamnese", "completar anamnese"])) return "review_anamnesis";
+  return "clinical";
+}
+
+function buildGuidedConversationResponse(scenario: MarieScenario, context: MarieContextPayload): MarieResponse | null {
+  const summary = buildMarieContextSummary(context);
+  const simpleCommand = classifySimpleCommand(summary);
+  const quickActions = visibleQuickActions(summary);
+  const currentStep = stepLabel(summary.step);
+  const missing = scenario.missingFields;
+  const nextData = nextMissingData(summary, missing);
+  const quickText = quickActionText(summary);
+
+  if (simpleCommand === "greeting") {
+    return {
+      message: `Olá. Estou aqui para apoiar o atendimento. Estamos na etapa de ${currentStep}. ${summary.step === "ANAMNESIS" ? "Podemos revisar área avaliada, indicação principal, achado principal e contraindicações antes de avançar." : "Posso orientar o próximo passo conforme esta etapa."} ${quickText}`.trim(),
+      warnings: [principle],
+      quickActions
+    };
+  }
+
+  if (simpleCommand === "help") {
+    const byStep: Record<string, string> = {
+      PREPARATION: "O ideal agora é iniciar ou localizar um atendimento em andamento e conferir o contexto do paciente.",
+      ANAMNESIS: "O ideal agora é confirmar área avaliada, indicação principal, achado principal e contraindicações. Depois disso, o plano fica mais seguro.",
+      CARE_PLAN: "O ideal agora é revisar os dados estruturados da anamnese e só então preencher ou ajustar o plano de cuidado.",
+      EXECUTION: "O ideal agora é registrar apenas o que foi realmente executado: procedimento, produtos, parâmetros do equipamento, tolerância e cuidados entregues.",
+      EVOLUTION: "O ideal agora é registrar resposta da paciente, evolução percebida, ajustes e próximos passos.",
+      COMPLETION: "O ideal agora é revisar pendências, evolução e necessidade de retorno antes de finalizar."
+    };
+    return {
+      message: `Estamos na etapa de ${currentStep}. ${byStep[summary.step] ?? byStep.ANAMNESIS} ${nextData ? `Se quiser avançar com segurança, o próximo dado a confirmar é: ${nextData}.` : ""} ${quickText}`.trim(),
+      warnings: [principle],
+      quickActions
+    };
+  }
+
+  if (simpleCommand === "advance") {
+    const message = summary.step === "ANAMNESIS" && nextData
+      ? `Antes de avançar, eu confirmaria ${nextData}. Isso evita gerar um plano com informação incompleta.`
+      : `Você pode avançar pelo painel de atendimento quando a profissional revisar os dados desta etapa. A Marie orienta, mas a mudança de etapa precisa da sua confirmação.`;
+    return { message: `${message} ${quickText}`.trim(), warnings: [principle], quickActions };
+  }
+
+  if (simpleCommand === "back") {
+    return {
+      message: `Você pode voltar para uma etapa anterior pelo fluxo do atendimento no painel. Ao voltar, revise os campos e continue a partir dali; a Marie acompanha a etapa atual.`,
+      warnings: [principle],
+      quickActions
+    };
+  }
+
+  if (simpleCommand === "review_anamnesis") {
+    const gaps = nextData ? `O primeiro ponto a revisar é: ${nextData}.` : "Os dados essenciais parecem preenchidos; revise contraindicações e observações profissionais antes do plano.";
+    return {
+      message: `Vamos revisar a anamnese inicial. ${gaps} Esses pontos servem como apoio para complementar o registro profissional. ${quickText}`.trim(),
+      warnings: scenario.detectedRisks.length ? scenario.detectedRisks : [principle],
+      quickActions
+    };
+  }
+
+  if (scenario.commandGoal === "SUGGEST_PROTOCOL" && !hasMinimumProtocolData(summary, missing, context)) {
+    return {
+      message: `Antes de sugerir um protocolo, preciso confirmar ${nextData || "os dados essenciais da anamnese"}. A sugestão fica mais segura quando área avaliada, indicação principal, achado principal e contraindicações estão revisados. ${quickText}`.trim(),
+      warnings: unique([...scenario.detectedRisks, "Não gerei protocolo porque a anamnese ainda está incompleta.", principle]),
+      quickActions
+    };
+  }
+
+  if (scenario.commandGoal === "FINISH" && summary.step !== "COMPLETION" && !summary.hasEvolutionForAppointment) {
+    return {
+      message: `Antes de finalizar, eu recomendo registrar a evolução ou revisar as pendências do atendimento. A finalização deve ser confirmada pela profissional no painel.`,
+      warnings: unique(["Finalização solicitada com pendências de evolução.", principle]),
+      quickActions
+    };
+  }
+
+  return null;
 }
 
 function detectSignals(summary: MarieContextSummary, scenarioIntent: string) {
@@ -319,9 +453,13 @@ export function buildDynamicMarieActions(scenario: MarieScenario, context: Marie
 }
 
 export function buildMarieResponseFromScenario(scenario: MarieScenario, context: MarieContextPayload): MarieResponse {
+  const guidedResponse = buildGuidedConversationResponse(scenario, context);
+  if (guidedResponse) return guidedResponse;
+  const summary = buildMarieContextSummary(context);
   return {
     message: buildMessageForStep(scenario, context),
     warnings: unique([...scenario.detectedRisks, ...scenario.contradictions, principle]),
-    actions: buildDynamicMarieActions(scenario, context)
+    actions: buildDynamicMarieActions(scenario, context),
+    quickActions: visibleQuickActions(summary)
   };
 }

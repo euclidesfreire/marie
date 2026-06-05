@@ -434,11 +434,11 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
     }
 
     return (
-      <div className="border-b border-border bg-white px-6 py-4">
-        <div className="mb-4 flex items-start justify-between gap-3">
+      <div className="border-b border-border bg-white px-3 py-3 sm:px-6 sm:py-4">
+        <div className="mb-3 flex items-start justify-between gap-3 sm:mb-4">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">Etapa atual</p>
-            <p className="text-lg font-bold leading-6 text-dark-accent">{activeStepLabel}</p>
+            <p className="text-base font-bold leading-6 text-dark-accent sm:text-lg">{activeStepLabel}</p>
           </div>
           <p className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted">Fluxo</p>
         </div>
@@ -479,7 +479,7 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <Stepper />
-      <div className="min-h-0 flex-1 overflow-y-auto bg-[#F8FAFD] p-3.5 2xl:p-4">
+      <div className="min-h-0 flex-1 overflow-y-auto bg-[#F8FAFD] p-3.5 pb-28 2xl:p-4">
         {message && <p className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">{message}</p>}
 
         {activeTab === "Preparação" && (
@@ -584,7 +584,7 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
                 <TextField label="Observações técnicas" name="technicalNotes" value={draftPayload.technicalNotes ?? assessment?.technicalNotes} textarea />
               </AccordionSection>
 
-              <div className="flex flex-wrap gap-2 border-t border-border pt-3">
+              <div className="sticky bottom-0 z-20 -mx-4 flex flex-wrap gap-2 border-t border-border bg-white px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:bg-transparent sm:px-0 sm:py-0 sm:pt-3">
                 <Button name="intent" value="draft" size="sm" disabled={isPending}><Save className="h-4 w-4" />Salvar rascunho</Button>
                 <Button name="intent" value="advance" size="sm" variant="primary" disabled={isPending}><Save className="h-4 w-4" />Salvar e avançar</Button>
               </div>
@@ -633,7 +633,9 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
               <TextField label="Observações profissionais" name="professionalNotes" value={draftPayload.professionalNotes ?? execution?.professionalNotes} textarea />
               <TextField label="Intercorrências" name="incidents" value={draftPayload.incidents ?? execution?.incidents} textarea />
               <TextField label="Cuidados pós-procedimento entregues" name="postCareGiven" value={draftPayload.postCareGiven ?? execution?.postCareGiven} textarea />
-              <Button size="sm" variant="primary" disabled={isPending}><Save className="h-4 w-4" />Salvar execução</Button>
+              <div className="sticky bottom-0 z-20 -mx-4 border-t border-border bg-white px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
+                <Button size="sm" variant="primary" disabled={isPending}><Save className="h-4 w-4" />Salvar execução</Button>
+              </div>
             </form>
           </StepForm>
         )}
@@ -650,7 +652,7 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
               <TextField label="Ajustes realizados" name="adjustmentsMade" value={draftPayload.adjustmentsMade} textarea />
               <TextField label="Próximos passos" name="nextSteps" value={draftPayload.nextSteps} textarea />
               <TextField label="Data de retorno" name="returnDate" value={draftPayload.returnDate} type="date" />
-              <div className="flex flex-wrap gap-2">
+              <div className="sticky bottom-0 z-20 -mx-4 flex flex-wrap gap-2 border-t border-border bg-white px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
                 <Button size="sm" variant="primary" disabled={isPending}><Save className="h-4 w-4" />Salvar evolução</Button>
                 {appointment?.status !== "FINISHED" && <Button type="button" size="sm" variant="success" onClick={() => run(async () => finishAppointment())}>Finalizar atendimento</Button>}
               </div>
