@@ -44,6 +44,8 @@ export type MarieContextPayload = {
   evolutions?: Evolution[];
   primaryTreatmentConcern?: MarieProtocolKey | null;
   mainTreatmentIndication?: MarieProtocolKey | null;
+  primaryFinding?: string | null;
+  mainFinding?: string | null;
   professionalCommand: string;
 };
 

@@ -253,9 +253,11 @@ model AestheticAssessment {
   appointmentId        String         @unique
   assessedArea         AssessmentArea
   primaryTreatmentConcern String?
+  primaryFinding       String?
   mainFinding          String?
   photoprotection      String?
   sunExposure          String?
+  acidUse              String?
   acidRetinoidUse      String?
   sensitizingMedication String?
   structuredContraindications String?

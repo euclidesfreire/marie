@@ -12,9 +12,11 @@ export function scoreProtocol(protocol: MarieTreatmentProtocol, summary: MarieCo
   if (explicitArea && explicitArea !== "BOTH" && protocol.area !== explicitArea) return -100;
 
   let score = 0;
+  score += matchCount(summary.structuredDecisionText, protocol.complaintKeywords) * 10;
   score += matchCount(summary.commandText, protocol.complaintKeywords) * 5;
-  score += matchCount(summary.complaintText, protocol.complaintKeywords) * 4;
   score += matchCount(summary.assessmentText, protocol.complaintKeywords) * 4;
+  score += matchCount(summary.complaintText, protocol.complaintKeywords) * 2;
+  score += matchCount(summary.freeTextComplaint, protocol.complaintKeywords) * 2;
   score += matchCount(summary.appointmentText, protocol.complaintKeywords) * 2;
   score += matchCount(summary.historyText, protocol.complaintKeywords);
 
@@ -27,8 +29,8 @@ export function detectMarieIntent(context: MarieContextLike): MarieProtocolKey {
   const summary = buildMarieContextSummary(context);
   const area = getMarieArea(context);
   const explicitArea = summary.explicitArea;
-  if (summary.primaryTreatmentConcern && summary.primaryTreatmentConcernCompatible) {
-    return summary.primaryTreatmentConcern;
+  if (summary.selectedTreatmentConcern && summary.primaryTreatmentConcernCompatible) {
+    return summary.selectedTreatmentConcern;
   }
   const allowedProtocols = Object.values(marieTreatmentKnowledge).filter((protocol) => {
     if (!explicitArea || explicitArea === "BOTH") return true;

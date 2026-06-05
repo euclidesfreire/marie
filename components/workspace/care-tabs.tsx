@@ -74,9 +74,11 @@ const anamnesisFields = ["chiefComplaint", "treatmentGoal", "allergies", "medica
 const assessmentFields = [
   "assessedArea",
   "primaryTreatmentConcern",
+  "primaryFinding",
   "mainFinding",
   "photoprotection",
   "sunExposure",
+  "acidUse",
   "acidRetinoidUse",
   "sensitizingMedication",
   "structuredContraindications",
@@ -192,6 +194,24 @@ function withStructuredSkinNotes(payload: Record<string, any>) {
   };
 }
 
+function withAssessmentAliases(payload: Record<string, any>) {
+  const finding = payload.primaryFinding ?? payload.mainFinding ?? null;
+  const acidUse = payload.acidUse ?? payload.acidRetinoidUse ?? null;
+  return {
+    ...payload,
+    primaryFinding: finding,
+    mainFinding: finding,
+    acidUse,
+    acidRetinoidUse: acidUse
+  };
+}
+
+function withSafeComplaint(payload: Record<string, any>, concernLabel?: string) {
+  if (typeof payload.chiefComplaint === "string" && payload.chiefComplaint.trim()) return payload;
+  const fallback = [concernLabel, payload.primaryFinding ?? payload.mainFinding].filter(Boolean).join(" - ");
+  return { ...payload, chiefComplaint: fallback || "Queixa estruturada em avaliação inicial" };
+}
+
 function TextField({ label, name, value, textarea, required, type = "text", placeholder }: { label: string; name: string; value?: string | null; textarea?: boolean; required?: boolean; type?: string; placeholder?: string }) {
   return (
     <label className="grid gap-1.5 text-sm font-medium text-foreground">
@@ -285,10 +305,13 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
   const draftPayload = mapMarieActionToStepDraft(draftAction, activeStep);
   const initialArea = (draftPayload.assessedArea ?? assessment?.assessedArea ?? "FACIAL") as MarieArea;
   const initialConcern = (draftPayload.primaryTreatmentConcern ?? assessment?.primaryTreatmentConcern ?? "") as MarieProtocolKey | "";
+  const initialFinding = (draftPayload.primaryFinding ?? draftPayload.mainFinding ?? assessment?.primaryFinding ?? assessment?.mainFinding ?? "") as string;
   const [selectedArea, setSelectedArea] = useState<MarieArea>(initialArea);
   const [selectedConcern, setSelectedConcern] = useState<MarieProtocolKey | "">(initialConcern);
+  const [selectedFinding, setSelectedFinding] = useState(initialFinding);
   const concernOptions = getTreatmentConcernOptionsForArea(selectedArea);
   const findingOptions = selectedConcern ? findingOptionsByConcern[selectedConcern] ?? [] : [];
+  const selectedConcernLabel = concernOptions.find((option) => option.value === selectedConcern)?.label;
 
   useEffect(() => {
     if (!appointment) return;
@@ -303,9 +326,11 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
   useEffect(() => {
     const nextArea = (draftPayload.assessedArea ?? assessment?.assessedArea ?? "FACIAL") as MarieArea;
     const nextConcern = (draftPayload.primaryTreatmentConcern ?? assessment?.primaryTreatmentConcern ?? "") as MarieProtocolKey | "";
+    const nextFinding = (draftPayload.primaryFinding ?? draftPayload.mainFinding ?? assessment?.primaryFinding ?? assessment?.mainFinding ?? "") as string;
     setSelectedArea(nextArea);
     setSelectedConcern(nextConcern && isTreatmentConcernCompatible(nextConcern, nextArea) ? nextConcern : "");
-  }, [assessment?.assessedArea, assessment?.primaryTreatmentConcern, draftPayload.assessedArea, draftPayload.primaryTreatmentConcern]);
+    setSelectedFinding(nextFinding);
+  }, [assessment?.assessedArea, assessment?.primaryTreatmentConcern, assessment?.primaryFinding, assessment?.mainFinding, draftPayload.assessedArea, draftPayload.primaryTreatmentConcern, draftPayload.primaryFinding, draftPayload.mainFinding]);
 
   const pendings = useMemo(() => {
     const items: string[] = [];
@@ -472,7 +497,8 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
               event.preventDefault();
               const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
               const shouldAdvance = submitter?.value !== "draft";
-              const payload = withStructuredSkinNotes(formObject(new FormData(event.currentTarget)));
+              const rawPayload = formObject(new FormData(event.currentTarget));
+              const payload = withSafeComplaint(withStructuredSkinNotes(withAssessmentAliases(rawPayload)), selectedConcernLabel);
               run(async () => {
                 await submit(anamnesis ? `/api/anamneses/${anamnesis.id}` : `/api/patients/${patient.id}/anamneses`, anamnesis ? "PUT" : "POST", pickFields(payload, anamnesisFields), "Anamnese salva.");
                 if (appointment) {
@@ -493,6 +519,7 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
                       const nextArea = event.currentTarget.value as MarieArea;
                       setSelectedArea(nextArea);
                       setSelectedConcern((current) => current && isTreatmentConcernCompatible(current, nextArea) ? current : "");
+                      setSelectedFinding("");
                     }} className="h-11 rounded-xl border border-border bg-white px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-blue-100">
                       <option value="FACIAL">Facial</option>
                       <option value="BODY">Corporal</option>
@@ -500,7 +527,10 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
                     </select>
                   </label>
                   <label className="grid gap-1.5 text-sm font-medium text-foreground">Indicação principal
-                    <select name="primaryTreatmentConcern" value={selectedConcern} onChange={(event) => setSelectedConcern(event.currentTarget.value as MarieProtocolKey | "")} className="h-11 rounded-xl border border-border bg-white px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-blue-100">
+                    <select name="primaryTreatmentConcern" value={selectedConcern} onChange={(event) => {
+                      setSelectedConcern(event.currentTarget.value as MarieProtocolKey | "");
+                      setSelectedFinding("");
+                    }} className="h-11 rounded-xl border border-border bg-white px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-blue-100">
                       <option value="">Selecione para orientar a Marie</option>
                       {selectedArea === "BOTH" ? (
                         <>
@@ -515,9 +545,9 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
                     </select>
                   </label>
                   {findingOptions.length > 0 && (
-                    <SelectField label="Achado principal" name="mainFinding" value={draftPayload.mainFinding ?? assessment?.mainFinding} options={[["", "Não informado"], ...findingOptions.map((option) => [option, option])]} />
+                    <SelectField label="Achado principal" name="primaryFinding" value={selectedFinding} onChange={setSelectedFinding} options={[["", "Não informado"], ...findingOptions.map((option) => [option, option])]} />
                   )}
-                  <TextField label="Detalhes da queixa relatada" name="chiefComplaint" value={draftPayload.chiefComplaint ?? anamnesis?.chiefComplaint} textarea required placeholder="Ex.: paciente relata cravos, oleosidade intensa, abdômen/flancos, manchas ou sensibilidade..." />
+                  <TextField label="Detalhes da queixa relatada" name="chiefComplaint" value={draftPayload.chiefComplaint ?? anamnesis?.chiefComplaint} textarea placeholder="Ex.: paciente relata cravos, oleosidade intensa, abdômen/flancos, manchas ou sensibilidade..." />
                   <TextField label="Objetivo do atendimento" name="treatmentGoal" value={draftPayload.treatmentGoal ?? anamnesis?.treatmentGoal} textarea placeholder="Ex.: reduzir medidas, melhorar textura da pele, controlar oleosidade..." />
                   <TextField label="Restrições / contraindicações" name="contraindications" value={draftPayload.contraindications ?? anamnesis?.contraindications} textarea placeholder="Ex.: alergias, gestação, uso de ácidos, sensibilidade, doenças, medicações..." />
                   <TextField label="Observações profissionais" name="notes" value={draftPayload.notes ?? anamnesis?.notes} textarea placeholder="Registre sua análise inicial, pontos de atenção e observações relevantes..." />
@@ -537,7 +567,7 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
                 <SelectField label="Sensibilidade" name="skinSensitivity" value={draftPayload.skinSensitivity ?? anamnesis?.skinSensitivity} options={sensitivityOptions} />
                 <SelectField label="Fotoproteção" name="photoprotection" value={draftPayload.photoprotection ?? assessment?.photoprotection} options={photoprotectionOptions} />
                 <SelectField label="Exposição solar" name="sunExposure" value={draftPayload.sunExposure ?? assessment?.sunExposure} options={sunExposureOptions} />
-                <SelectField label="Uso recente de ácidos/retinoides" name="acidRetinoidUse" value={draftPayload.acidRetinoidUse ?? assessment?.acidRetinoidUse} options={acidUseOptions} />
+                <SelectField label="Uso recente de ácidos/retinoides" name="acidUse" value={draftPayload.acidUse ?? draftPayload.acidRetinoidUse ?? assessment?.acidUse ?? assessment?.acidRetinoidUse} options={acidUseOptions} />
                 <SelectField label="Medicamento sensibilizante / Roacutan / isotretinoína" name="sensitizingMedication" value={draftPayload.sensitizingMedication ?? assessment?.sensitizingMedication} options={sensitizingMedicationOptions} />
               </AccordionSection>
 

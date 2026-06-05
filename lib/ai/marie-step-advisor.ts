@@ -125,7 +125,12 @@ function detectContradictions(summary: MarieContextSummary, commandGoal: MarieCo
 }
 
 function buildExplanation(summary: MarieContextSummary, scenario: Pick<MarieScenario, "subtype" | "safetyProfile" | "missingFields" | "detectedRisks" | "careMaturity">) {
+  const concernLabel = summary.selectedTreatmentConcern ? getTreatmentConcernOption(summary.selectedTreatmentConcern)?.label : null;
+  const structuredEvidence = summary.explicitArea && concernLabel && summary.selectedFinding
+    ? `Considerei a área avaliada ${summary.explicitArea === "FACIAL" ? "Facial" : summary.explicitArea === "BODY" ? "Corporal" : "Facial e corporal"}, a indicação principal ${concernLabel} e o achado principal ${summary.selectedFinding}. A descrição livre da queixa foi usada apenas como complemento.`
+    : "";
   const evidence = [
+    structuredEvidence,
     summary.chiefComplaint ? `a queixa principal (${summary.chiefComplaint})` : "",
     summary.treatmentGoal ? `o objetivo informado (${summary.treatmentGoal})` : "",
     summary.hasAssessment ? `a avaliação estética e a área ${summary.area.toLowerCase()}` : "",
@@ -214,6 +219,14 @@ function messageEnding(scenario: MarieScenario) {
 
 export function buildMessageForStep(scenario: MarieScenario, context: MarieContextPayload) {
   const summary = buildMarieContextSummary(context);
+  const concernLabel = summary.selectedTreatmentConcern ? getTreatmentConcernOption(summary.selectedTreatmentConcern)?.label : null;
+  const structuredContextMessage = summary.explicitArea && concernLabel && summary.selectedFinding
+    ? `Considerei a área avaliada ${summary.explicitArea === "FACIAL" ? "Facial" : summary.explicitArea === "BODY" ? "Corporal" : "Facial e corporal"}, a indicação principal ${concernLabel} e o achado principal ${summary.selectedFinding}. A descrição livre da queixa foi usada apenas como complemento.`
+    : !summary.selectedTreatmentConcern
+      ? "Para melhorar a precisão da sugestão, selecione a indicação principal antes de gerar o plano."
+      : !summary.selectedFinding
+        ? "Selecionar o achado principal ajuda a Marie a ajustar subtipo, cautelas e procedimentos."
+        : "";
   const gaps = scenario.missingFields.length ? `Ainda faltam: ${sentenceList(scenario.missingFields)}.` : "Os dados essenciais desta etapa estão razoavelmente preenchidos.";
   const questions = scenario.suggestedQuestions.length ? `Antes de avançar, eu confirmaria: ${sentenceList(scenario.suggestedQuestions.slice(0, 4))}` : "";
   const safety = safetyReminder(scenario);
@@ -238,7 +251,7 @@ export function buildMessageForStep(scenario: MarieScenario, context: MarieConte
     EVOLUTION: "Para construir uma evolução útil, eu compararia a sessão com a resposta observada.",
     COMPLETION: "Antes de encerrar, vale revisar o atendimento como um todo."
   };
-  return `${stepOpening[scenario.step] ?? stepOpening.ANAMNESIS} ${byStep[scenario.step] ?? byStep.ANAMNESIS} ${safety} ${messageEnding(scenario)}`.replace(/\s+/g, " ").trim();
+  return `${structuredContextMessage} ${stepOpening[scenario.step] ?? stepOpening.ANAMNESIS} ${byStep[scenario.step] ?? byStep.ANAMNESIS} ${safety} ${messageEnding(scenario)}`.replace(/\s+/g, " ").trim();
 }
 
 export const buildDynamicMarieMessage = buildMessageForStep;

@@ -11,6 +11,8 @@ export type MarieContextLike = {
   evolutions?: any[];
   primaryTreatmentConcern?: MarieProtocolKey | null;
   mainTreatmentIndication?: MarieProtocolKey | null;
+  primaryFinding?: string | null;
+  mainFinding?: string | null;
   professionalCommand: string;
 };
 
@@ -57,9 +59,11 @@ export function collectContextText(context: MarieContextLike) {
     assessment.assessedArea,
     assessment.primaryTreatmentConcern,
     assessment.mainTreatmentIndication,
+    assessment.primaryFinding,
     assessment.mainFinding,
     assessment.photoprotection,
     assessment.sunExposure,
+    assessment.acidUse,
     assessment.acidRetinoidUse,
     assessment.sensitizingMedication,
     assessment.structuredContraindications,
@@ -176,14 +180,51 @@ export function buildMarieContextSummary(context: MarieContextLike): MarieContex
   const assessment = context.assessment ?? {};
   const appointment = context.appointment ?? {};
   const commandText = normalizeMarieText(context.professionalCommand);
+  const selectedConcern = context.primaryTreatmentConcern
+    ?? context.mainTreatmentIndication
+    ?? context.assessment?.primaryTreatmentConcern
+    ?? context.assessment?.mainTreatmentIndication
+    ?? context.appointment?.primaryTreatmentConcern
+    ?? context.appointment?.mainTreatmentIndication
+    ?? null;
+  const concernOption = getTreatmentConcernOption(selectedConcern);
+  const area = getMarieArea(context);
+  const explicitArea = ["FACIAL", "BODY", "BOTH"].includes(assessment.assessedArea) ? assessment.assessedArea as MarieArea : undefined;
+  const primaryTreatmentConcernCompatible = !concernOption || !explicitArea || explicitArea === "BOTH" || concernOption.area === explicitArea;
+  const selectedFinding = context.primaryFinding
+    ?? context.mainFinding
+    ?? assessment.primaryFinding
+    ?? assessment.mainFinding
+    ?? appointment.primaryFinding
+    ?? appointment.mainFinding
+    ?? "";
+  const structuredDecisionText = normalizeMarieText([
+    area,
+    concernOption?.label,
+    concernOption?.value,
+    selectedFinding
+  ].filter(Boolean).join(" "));
+  const structuredRiskText = normalizeMarieText([
+    assessment.structuredContraindications,
+    assessment.photoprotection,
+    assessment.sunExposure,
+    assessment.acidUse,
+    assessment.acidRetinoidUse,
+    assessment.sensitizingMedication,
+    anamnesis.skinType,
+    anamnesis.skinSensitivity,
+    assessment.structuredHabits
+  ].filter(Boolean).join(" "));
   const complaintText = normalizeMarieText([
     anamnesis.chiefComplaint,
     anamnesis.treatmentGoal,
     anamnesis.skinType,
     anamnesis.skinSensitivity,
+    assessment.primaryFinding,
     assessment.mainFinding,
     assessment.photoprotection,
     assessment.sunExposure,
+    assessment.acidUse,
     assessment.acidRetinoidUse,
     assessment.sensitizingMedication,
     assessment.structuredContraindications,
@@ -195,9 +236,11 @@ export function buildMarieContextSummary(context: MarieContextLike): MarieContex
     assessment.assessedArea,
     assessment.primaryTreatmentConcern,
     assessment.mainTreatmentIndication,
+    assessment.primaryFinding,
     assessment.mainFinding,
     assessment.photoprotection,
     assessment.sunExposure,
+    assessment.acidUse,
     assessment.acidRetinoidUse,
     assessment.sensitizingMedication,
     assessment.structuredContraindications,
@@ -231,18 +274,6 @@ export function buildMarieContextSummary(context: MarieContextLike): MarieContex
   const hasApprovedProtocol = (context.protocols ?? []).some((item) => ["APPROVED", "APPLIED"].includes(item.status));
   const hasProtocolDraft = (context.suggestions ?? []).some((item) => ["DRAFT", "WAITING_REVIEW", "ADJUSTED"].includes(item.status)) || (context.protocols ?? []).some((item) => item.status === "DRAFT");
   const hasEvolutionForAppointment = (context.evolutions ?? []).some((item) => !context.appointment?.id || item.appointmentId === context.appointment.id);
-  const selectedConcern = context.primaryTreatmentConcern
-    ?? context.mainTreatmentIndication
-    ?? context.assessment?.primaryTreatmentConcern
-    ?? context.assessment?.mainTreatmentIndication
-    ?? context.appointment?.primaryTreatmentConcern
-    ?? context.appointment?.mainTreatmentIndication
-    ?? null;
-  const concernOption = getTreatmentConcernOption(selectedConcern);
-  const area = getMarieArea(context);
-  const explicitArea = ["FACIAL", "BODY", "BOTH"].includes(assessment.assessedArea) ? assessment.assessedArea as MarieArea : undefined;
-  const primaryTreatmentConcernCompatible = !concernOption || !explicitArea || explicitArea === "BOTH" || concernOption.area === explicitArea;
-
   return {
     command: context.professionalCommand,
     normalizedCommand: commandText,
@@ -250,7 +281,7 @@ export function buildMarieContextSummary(context: MarieContextLike): MarieContex
     complaintText,
     assessmentText,
     appointmentText,
-    allText: normalizeMarieText(`${commandText} ${clinicalText} ${historyText}`),
+    allText: normalizeMarieText(`${commandText} ${structuredDecisionText} ${structuredRiskText} ${clinicalText} ${historyText}`),
     clinicalText,
     historyText,
     chiefComplaint: anamnesis.chiefComplaint ?? appointment.dailyComplaint ?? "",
@@ -259,8 +290,12 @@ export function buildMarieContextSummary(context: MarieContextLike): MarieContex
     explicitArea,
     primaryTreatmentConcern: concernOption?.value,
     primaryTreatmentConcernCompatible,
+    primaryFinding: selectedFinding || undefined,
+    selectedFinding: selectedFinding || undefined,
     selectedArea: area,
     selectedTreatmentConcern: concernOption?.value,
+    structuredDecisionText,
+    structuredRiskText,
     structuredSkinType: anamnesis.skinType ?? "",
     structuredSensitivity: anamnesis.skinSensitivity ?? "",
     structuredPhotoprotection: assessment.photoprotection ?? "",
@@ -314,8 +349,65 @@ export function detectCareMaturity(context: MarieContextLike, summary = buildMar
 }
 
 export function detectCaseSubtype(summary: MarieContextSummary): MarieCaseSubtype {
+  const finding = normalizeMarieText(summary.primaryFinding ?? summary.selectedFinding ?? "");
+  const structured = normalizeMarieText(`${summary.structuredDecisionText} ${summary.structuredRiskText}`);
+
+  function subtypeFromStructuredText(text: string): MarieCaseSubtype | null {
+    if (summary.selectedTreatmentConcern === "facial_acne") {
+      if (includesAny(text, ["oleosidade", "oleosidade predominante"])) return "oily_skin";
+      if (includesAny(text, ["comedoes", "comedões", "comedao", "comedão", "cravos", "cravo"])) return "comedonal_acne";
+      if (includesAny(text, ["pustulas", "pústulas", "lesoes inflamadas", "lesões inflamadas", "inflamada"])) return "inflammatory_acne";
+      if (includesAny(text, ["sensibilizada", "sensivel", "sensível"])) return "sensitive_acne";
+      if (includesAny(text, ["manchas pos-acne", "manchas pós-acne"])) return "post_inflammatory_hyperpigmentation";
+    }
+    if (summary.selectedTreatmentConcern === "facial_clareamento") {
+      if (includesAny(text, ["melasma", "cloasma"])) return "melasma";
+      if (includesAny(text, ["hpi", "pos-inflamatoria", "pós-inflamatória", "manchas pos-acne", "manchas pós-acne"])) return "post_inflammatory_hyperpigmentation";
+      if (includesAny(text, ["efelides", "efélides", "melanose solar"])) return "solar_spots";
+    }
+    if (summary.selectedTreatmentConcern === "facial_rejuvenescimento") {
+      if (includesAny(text, ["linhas finas", "rugas", "perda de vico", "perda de viço", "desvitalizada", "ressecada"])) return "dehydrated_aging_skin";
+      if (includesAny(text, ["flacidez leve"])) return "facial_laxity";
+    }
+    if (summary.selectedTreatmentConcern === "facial_olheiras") {
+      if (includesAny(text, ["olheira", "olheiras", "pigmentada", "vascular", "edema periocular", "sensibilidade periocular"])) return "under_eye_dark_circles";
+    }
+    if (summary.selectedTreatmentConcern === "facial_flacidez_papada") {
+      if (includesAny(text, ["papada", "flacidez facial", "contorno mandibular", "perda de firmeza"])) return "facial_laxity";
+    }
+    if (summary.selectedTreatmentConcern === "corporal_gordura") {
+      if (includesAny(text, ["flacidez"])) return "localized_fat_with_laxity";
+      if (includesAny(text, ["abdomen", "abdômen", "flancos", "culote", "reducao de medidas", "redução de medidas"])) return "localized_abdominal_fat";
+    }
+    if (summary.selectedTreatmentConcern === "corporal_celulite") {
+      if (includesAny(text, ["fibrosa", "fibrose", "flacidez associada"])) return "cellulite_fibrotic";
+      if (includesAny(text, ["retencao hidrica", "retenção hídrica", "edematosa", "sensibilidade local"])) return "cellulite_edematous";
+    }
+    if (summary.selectedTreatmentConcern === "corporal_estrias") {
+      if (includesAny(text, ["recentes", "avermelhadas"])) return "recent_stretch_marks";
+      if (includesAny(text, ["antigas", "brancas"])) return "old_stretch_marks";
+    }
+    if (summary.selectedTreatmentConcern === "corporal_flacidez") {
+      if (includesAny(text, ["gordura localizada"])) return "localized_fat_with_laxity";
+      if (includesAny(text, ["flacidez corporal", "tonificacao", "tonificação", "pos-emagrecimento", "pós-emagrecimento"])) return "body_laxity";
+    }
+    if (summary.selectedTreatmentConcern === "corporal_clareamento") {
+      if (includesAny(text, ["axila", "virilha", "interno de coxa", "gluteos", "glúteos", "joelho", "cotovelo", "atrito"])) return "intimate_area_darkening";
+    }
+    if (summary.selectedTreatmentConcern === "corporal_relaxamento") {
+      if (includesAny(text, ["relaxamento", "drenagem", "retencao", "retenção", "tensao muscular", "tensão muscular", "spa dos pes", "spa dos pés", "detox"])) return "relaxation_and_fluid_retention";
+    }
+    return null;
+  }
+
+  const findingSubtype = subtypeFromStructuredText(finding);
+  if (findingSubtype) return findingSubtype;
+
+  const structuredSubtype = subtypeFromStructuredText(structured);
+  if (structuredSubtype) return structuredSubtype;
+
   // Histórico antigo ajuda na comparação, mas não deve redefinir o caso atual.
-  const text = normalizeMarieText(`${summary.commandText} ${summary.complaintText} ${summary.assessmentText} ${summary.appointmentText}`);
+  const text = normalizeMarieText(`${summary.commandText} ${summary.freeTextComplaint} ${summary.complaintText} ${summary.assessmentText} ${summary.appointmentText}`);
   if (includesAny(text, ["roacutan", "isotretinoina", "isotretinoína", "pele acneica sensibilizada", "acne sensivel", "acne sensível", "acne com acido", "acne com ácido", "descamacao", "descamação"])) return "sensitive_acne";
   if (includesAny(text, ["pustula", "pústula", "inflamada", "inflamatoria", "inflamatória", "papula", "pápula"])) return "inflammatory_acne";
   if (includesAny(text, ["comedao", "comedão", "comedoes", "comedões", "cravo", "cravos"])) return "comedonal_acne";
