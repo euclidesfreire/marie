@@ -7,7 +7,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export async function getCurrentUser() {
-  let user = await prisma.user.findFirst({ where: { email: "profissional@marie.app" } });
+  let user = await prisma.user.findFirst({ where: { email: "estetica@senac.br" } });
   if (!user) {
     user = await prisma.user.findFirst({ where: { role: "PROFESSIONAL" }, orderBy: { createdAt: "asc" } });
   }
