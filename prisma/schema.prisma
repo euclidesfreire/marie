@@ -252,6 +252,14 @@ model AestheticAssessment {
   id                   String         @id @default(cuid())
   appointmentId        String         @unique
   assessedArea         AssessmentArea
+  primaryTreatmentConcern String?
+  mainFinding          String?
+  photoprotection      String?
+  sunExposure          String?
+  acidRetinoidUse      String?
+  sensitizingMedication String?
+  structuredContraindications String?
+  structuredHabits     String?
   professionalAnalysis String?
   skinCondition        String?
   bodyCondition        String?

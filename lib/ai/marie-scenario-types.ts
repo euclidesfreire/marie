@@ -66,6 +66,16 @@ export type MarieContextSummary = {
   explicitArea?: MarieArea;
   primaryTreatmentConcern?: MarieProtocolKey;
   primaryTreatmentConcernCompatible: boolean;
+  selectedArea: MarieArea;
+  selectedTreatmentConcern?: MarieProtocolKey;
+  structuredSkinType: string;
+  structuredSensitivity: string;
+  structuredPhotoprotection: string;
+  structuredSunExposure: string;
+  structuredContraindications: string;
+  structuredHabits: string;
+  freeTextComplaint: string;
+  professionalNotes: string;
   step: string;
   appointmentStatus?: string;
   hasAppointment: boolean;

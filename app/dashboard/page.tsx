@@ -64,7 +64,7 @@ export default async function DashboardPage() {
       <div className="mx-auto grid max-w-[1540px] gap-6 p-4 sm:p-6 xl:grid-cols-[1fr_420px]">
         <main className="min-w-0 space-y-6">
           <section>
-            <h1 className="text-2xl font-bold tracking-tight text-senac-blue">Olá, {user.name.split(" ")[0] === "Dra." ? user.name : `Dra. ${user.name}`}! <span className="text-senac-orange">👋</span></h1>
+            <h1 className="text-2xl font-bold tracking-tight text-senac-blue">Olá, {user.name}! <span className="text-senac-orange">👋</span></h1>
             <p className="mt-2 text-sm text-muted">Aqui está o que está acontecendo hoje na sua clínica.</p>
           </section>
 

@@ -6,21 +6,17 @@ CREATE TYPE "FollowUpType" AS ENUM ('RETURN', 'FOLLOW_UP', 'PROTOCOL_REVIEW', 'E
 CREATE TYPE "FollowUpStatus" AS ENUM ('OPEN', 'COMPLETED', 'CANCELED');
 
 ALTER TYPE "AppointmentStatus" ADD VALUE IF NOT EXISTS 'REOPENED';
-ALTER TYPE "AppointmentStep" ADD VALUE IF NOT EXISTS 'CARE_PLAN';
-ALTER TYPE "AppointmentStep" ADD VALUE IF NOT EXISTS 'COMPLETION';
-
-UPDATE "Appointment"
-SET "currentStep" = 'CARE_PLAN'
-WHERE "currentStep"::text IN ('SUGGESTION', 'VALIDATION', 'FINAL_PROTOCOL');
-
-UPDATE "Appointment"
-SET "currentStep" = 'COMPLETION'
-WHERE "currentStep"::text = 'COMPLETED';
 
 BEGIN;
 CREATE TYPE "AppointmentStep_new" AS ENUM ('PREPARATION', 'ANAMNESIS', 'ASSESSMENT', 'CARE_PLAN', 'EXECUTION', 'EVOLUTION', 'COMPLETION');
 ALTER TABLE "Appointment" ALTER COLUMN "currentStep" DROP DEFAULT;
-ALTER TABLE "Appointment" ALTER COLUMN "currentStep" TYPE "AppointmentStep_new" USING ("currentStep"::text::"AppointmentStep_new");
+ALTER TABLE "Appointment" ALTER COLUMN "currentStep" TYPE "AppointmentStep_new" USING (
+  CASE
+    WHEN "currentStep"::text IN ('SUGGESTION', 'VALIDATION', 'FINAL_PROTOCOL') THEN 'CARE_PLAN'
+    WHEN "currentStep"::text = 'COMPLETED' THEN 'COMPLETION'
+    ELSE "currentStep"::text
+  END::"AppointmentStep_new"
+);
 ALTER TYPE "AppointmentStep" RENAME TO "AppointmentStep_old";
 ALTER TYPE "AppointmentStep_new" RENAME TO "AppointmentStep";
 DROP TYPE "AppointmentStep_old";

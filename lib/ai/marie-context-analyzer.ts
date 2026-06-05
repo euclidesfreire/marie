@@ -55,6 +55,15 @@ export function collectContextText(context: MarieContextLike) {
     anamnesis.habits,
     anamnesis.notes,
     assessment.assessedArea,
+    assessment.primaryTreatmentConcern,
+    assessment.mainTreatmentIndication,
+    assessment.mainFinding,
+    assessment.photoprotection,
+    assessment.sunExposure,
+    assessment.acidRetinoidUse,
+    assessment.sensitizingMedication,
+    assessment.structuredContraindications,
+    assessment.structuredHabits,
     assessment.professionalAnalysis,
     assessment.skinCondition,
     assessment.bodyCondition,
@@ -134,6 +143,7 @@ export function getMissingFields(context: MarieContextLike) {
       missing.push("avaliação estética");
     } else {
       if (isBlankMarieValue(assessment.assessedArea)) missing.push("área avaliada");
+      if (isBlankMarieValue(assessment.primaryTreatmentConcern ?? assessment.mainTreatmentIndication)) missing.push("indicação principal");
       if (isBlankMarieValue(assessment.professionalAnalysis)) missing.push("análise profissional");
       if (isBlankMarieValue(assessment.perceivedRisks)) missing.push("riscos percebidos");
     }
@@ -171,11 +181,27 @@ export function buildMarieContextSummary(context: MarieContextLike): MarieContex
     anamnesis.treatmentGoal,
     anamnesis.skinType,
     anamnesis.skinSensitivity,
+    assessment.mainFinding,
+    assessment.photoprotection,
+    assessment.sunExposure,
+    assessment.acidRetinoidUse,
+    assessment.sensitizingMedication,
+    assessment.structuredContraindications,
+    assessment.structuredHabits,
     anamnesis.habits,
     anamnesis.notes
   ].filter(Boolean).join(" "));
   const assessmentText = normalizeMarieText([
     assessment.assessedArea,
+    assessment.primaryTreatmentConcern,
+    assessment.mainTreatmentIndication,
+    assessment.mainFinding,
+    assessment.photoprotection,
+    assessment.sunExposure,
+    assessment.acidRetinoidUse,
+    assessment.sensitizingMedication,
+    assessment.structuredContraindications,
+    assessment.structuredHabits,
     assessment.professionalAnalysis,
     assessment.skinCondition,
     assessment.bodyCondition,
@@ -233,6 +259,16 @@ export function buildMarieContextSummary(context: MarieContextLike): MarieContex
     explicitArea,
     primaryTreatmentConcern: concernOption?.value,
     primaryTreatmentConcernCompatible,
+    selectedArea: area,
+    selectedTreatmentConcern: concernOption?.value,
+    structuredSkinType: anamnesis.skinType ?? "",
+    structuredSensitivity: anamnesis.skinSensitivity ?? "",
+    structuredPhotoprotection: assessment.photoprotection ?? "",
+    structuredSunExposure: assessment.sunExposure ?? "",
+    structuredContraindications: assessment.structuredContraindications ?? "",
+    structuredHabits: assessment.structuredHabits ?? "",
+    freeTextComplaint: anamnesis.chiefComplaint ?? appointment.dailyComplaint ?? "",
+    professionalNotes: [anamnesis.notes, assessment.professionalAnalysis, assessment.technicalNotes].filter(Boolean).join("\n"),
     step: getCurrentStep(context),
     appointmentStatus: appointment.status,
     hasAppointment: Boolean(context.appointment),

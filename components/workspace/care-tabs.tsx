@@ -11,6 +11,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { labelFor } from "@/lib/labels";
 import { formatDate } from "@/lib/utils";
 import { getMarieActionTargetStep, mapMarieActionToStepDraft, stepToCareTab } from "@/lib/ai/marie-action-drafts";
+import {
+  getTreatmentConcernOptionsForArea,
+  isTreatmentConcernCompatible,
+  type MarieArea,
+  type MarieProtocolKey
+} from "@/lib/ai/marie-knowledge-base";
 
 const flowSteps = [
   { key: "PREPARATION", label: "Preparação" },
@@ -50,7 +56,11 @@ function stepFromLabel(label: string): StepKey {
 }
 
 function formObject(formData: FormData) {
-  return Object.fromEntries([...formData.entries()].map(([key, value]) => [key, value === "" ? null : value]));
+  return [...new Set([...formData.keys()])].reduce<Record<string, any>>((payload, key) => {
+    const values = formData.getAll(key).map((value) => String(value)).filter((value) => value !== "");
+    payload[key] = values.length > 1 ? values.join(", ") : values[0] ?? null;
+    return payload;
+  }, {});
 }
 
 function pickFields(source: Record<string, any>, fields: string[]) {
@@ -61,7 +71,111 @@ function pickFields(source: Record<string, any>, fields: string[]) {
 }
 
 const anamnesisFields = ["chiefComplaint", "treatmentGoal", "allergies", "medications", "preExistingConditions", "previousProcedures", "skinType", "skinSensitivity", "contraindications", "habits", "notes"];
-const assessmentFields = ["assessedArea", "professionalAnalysis", "skinCondition", "bodyCondition", "perceivedRisks", "technicalNotes"];
+const assessmentFields = [
+  "assessedArea",
+  "primaryTreatmentConcern",
+  "mainFinding",
+  "photoprotection",
+  "sunExposure",
+  "acidRetinoidUse",
+  "sensitizingMedication",
+  "structuredContraindications",
+  "structuredHabits",
+  "professionalAnalysis",
+  "skinCondition",
+  "bodyCondition",
+  "perceivedRisks",
+  "technicalNotes"
+];
+
+const skinTypeOptions = [
+  ["", "Não informado"],
+  ["Normal", "Normal"],
+  ["Oleosa", "Oleosa"],
+  ["Seca / alípica", "Seca / alípica"],
+  ["Mista", "Mista"],
+  ["Sensível", "Sensível"],
+  ["Acneica", "Acneica"]
+];
+
+const sensitivityOptions = [
+  ["", "Não informado"],
+  ["Baixa", "Baixa"],
+  ["Moderada", "Moderada"],
+  ["Alta", "Alta"],
+  ["Pele sensibilizada / reativa", "Pele sensibilizada / reativa"]
+];
+
+const photoprotectionOptions = [
+  ["", "Não informado"],
+  ["Usa diariamente", "Usa diariamente"],
+  ["Usa irregularmente", "Usa irregularmente"],
+  ["Não usa", "Não usa"],
+  ["Exposição solar frequente", "Exposição solar frequente"]
+];
+
+const sunExposureOptions = [
+  ["", "Não informado"],
+  ["Baixa", "Baixa"],
+  ["Moderada", "Moderada"],
+  ["Frequente", "Frequente"],
+  ["Intensa", "Intensa"]
+];
+
+const acidUseOptions = [
+  ["", "Não informado"],
+  ["Não", "Não"],
+  ["Sim", "Sim"],
+  ["Sim, com sensibilidade", "Sim, com sensibilidade"],
+  ["Suspenso recentemente", "Suspenso recentemente"]
+];
+
+const sensitizingMedicationOptions = [
+  ["", "Não informado"],
+  ["Não", "Não"],
+  ["Sim, Roacutan/isotretinoína", "Sim, Roacutan/isotretinoína"],
+  ["Sim, outro medicamento sensibilizante", "Sim, outro medicamento sensibilizante"]
+];
+
+const contraindicationOptions = [
+  "Gestação",
+  "Marca-passo",
+  "Alterações cardíacas",
+  "Alergias",
+  "Sensibilidade intensa",
+  "Lesão ativa / ferida aberta",
+  "Alterações vasculares/circulatórias",
+  "Histórico de reação a procedimento",
+  "Uso recente de ácidos",
+  "Roacutan/isotretinoína",
+  "Nenhuma informada"
+];
+
+const habitOptions = [
+  "Baixa ingestão de água",
+  "Sedentarismo",
+  "Tabagismo",
+  "Sono irregular",
+  "Alimentação rica em açúcar",
+  "Exposição solar frequente",
+  "Nenhum relevante informado"
+];
+
+const findingOptionsByConcern: Partial<Record<MarieProtocolKey, string[]>> = {
+  facial_acne: ["Comedões/cravos", "Pústulas/lesões inflamadas", "Oleosidade predominante", "Pele sensibilizada", "Manchas pós-acne"],
+  facial_clareamento: ["Melasma", "HPI", "Efélides", "Melanose solar", "Manchas pós-acne"],
+  facial_rejuvenescimento: ["Linhas finas", "Rugas", "Pele desvitalizada", "Pele sensível", "Pele ressecada"],
+  facial_olheiras: ["Olheira vascular", "Olheira pigmentada", "Edema periocular", "Sensibilidade periocular", "Flacidez associada"],
+  facial_flacidez_papada: ["Papada", "Contorno mandibular", "Flacidez facial leve", "Flacidez com envelhecimento", "Flacidez com sensibilidade"],
+  facial_sinais_cicatrizes: ["Cicatriz atrófica", "Verruga", "Nevo", "Siringoma", "Cicatriz pós-acne"],
+  facial_outras: ["Limpeza de pele", "Revitalização", "Drenagem facial", "Detox facial", "Pele opaca"],
+  corporal_gordura: ["Abdômen", "Flancos", "Culote", "Associada à flacidez", "Associada a sedentarismo"],
+  corporal_celulite: ["Retenção hídrica", "Fibrose", "Sensibilidade local", "Associada à flacidez", "Associada a sedentarismo"],
+  corporal_estrias: ["Estrias recentes", "Estrias antigas", "Estrias avermelhadas", "Estrias brancas", "Pele sensível"],
+  corporal_flacidez: ["Flacidez leve", "Pós-emagrecimento", "Tonificação", "Associada à gordura localizada", "Contraindicação para correntes"],
+  corporal_clareamento: ["Axila", "Virilha", "Interno de coxa", "Glúteos", "Joelho", "Cotovelo"],
+  corporal_relaxamento: ["Relaxamento", "Retenção hídrica", "Drenagem linfática", "Detox corporal", "Spa dos pés", "Tensão muscular"]
+};
 
 function withStructuredSkinNotes(payload: Record<string, any>) {
   const extras = [
@@ -84,6 +198,34 @@ function TextField({ label, name, value, textarea, required, type = "text", plac
       {label}
       {textarea ? <Textarea name={name} defaultValue={value ?? ""} required={required} placeholder={placeholder} /> : <Input type={type} name={name} defaultValue={value ?? ""} required={required} placeholder={placeholder} />}
     </label>
+  );
+}
+
+function SelectField({ label, name, value, options, required, onChange }: { label: string; name: string; value?: string | null; options: string[][]; required?: boolean; onChange?: (value: string) => void }) {
+  return (
+    <label className="grid gap-1.5 text-sm font-medium text-foreground">
+      {label}
+      <select name={name} defaultValue={value ?? ""} required={required} onChange={(event) => onChange?.(event.currentTarget.value)} className="h-11 rounded-xl border border-border bg-white px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-blue-100">
+        {options.map(([optionValue, labelText]) => <option key={optionValue || labelText} value={optionValue}>{labelText}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function CheckboxGroup({ label, name, options, value }: { label: string; name: string; options: string[]; value?: string | null }) {
+  const selected = new Set(String(value ?? "").split(",").map((item) => item.trim()).filter(Boolean));
+  return (
+    <fieldset className="grid gap-2">
+      <legend className="text-sm font-medium text-foreground">{label}</legend>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {options.map((option) => (
+          <label key={option} className="flex min-h-10 items-center gap-2 rounded-xl border border-border bg-white px-3 py-2 text-sm text-foreground">
+            <input type="checkbox" name={name} value={option} defaultChecked={selected.has(option)} className="h-4 w-4 rounded border-border text-primary focus:ring-primary" />
+            <span>{option}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 }
 
@@ -141,6 +283,12 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
   const currentStep = appointment?.currentStep ?? "ANAMNESIS";
   const activeStep = stepFromLabel(activeTab);
   const draftPayload = mapMarieActionToStepDraft(draftAction, activeStep);
+  const initialArea = (draftPayload.assessedArea ?? assessment?.assessedArea ?? "FACIAL") as MarieArea;
+  const initialConcern = (draftPayload.primaryTreatmentConcern ?? assessment?.primaryTreatmentConcern ?? "") as MarieProtocolKey | "";
+  const [selectedArea, setSelectedArea] = useState<MarieArea>(initialArea);
+  const [selectedConcern, setSelectedConcern] = useState<MarieProtocolKey | "">(initialConcern);
+  const concernOptions = getTreatmentConcernOptionsForArea(selectedArea);
+  const findingOptions = selectedConcern ? findingOptionsByConcern[selectedConcern] ?? [] : [];
 
   useEffect(() => {
     if (!appointment) return;
@@ -151,6 +299,13 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
     if (!draftAction) return;
     setActiveTab(stepToCareTab(getMarieActionTargetStep(draftAction, currentStep)));
   }, [draftAction, currentStep, setActiveTab]);
+
+  useEffect(() => {
+    const nextArea = (draftPayload.assessedArea ?? assessment?.assessedArea ?? "FACIAL") as MarieArea;
+    const nextConcern = (draftPayload.primaryTreatmentConcern ?? assessment?.primaryTreatmentConcern ?? "") as MarieProtocolKey | "";
+    setSelectedArea(nextArea);
+    setSelectedConcern(nextConcern && isTreatmentConcernCompatible(nextConcern, nextArea) ? nextConcern : "");
+  }, [assessment?.assessedArea, assessment?.primaryTreatmentConcern, draftPayload.assessedArea, draftPayload.primaryTreatmentConcern]);
 
   const pendings = useMemo(() => {
     const items: string[] = [];
@@ -334,13 +489,35 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
                 </div>
                 <div className="space-y-3">
                   <label className="grid gap-1.5 text-sm font-medium">Área avaliada
-                    <select name="assessedArea" defaultValue={draftPayload.assessedArea ?? assessment?.assessedArea ?? "FACIAL"} required className="h-11 rounded-xl border border-border bg-white px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-blue-100">
+                    <select name="assessedArea" value={selectedArea} required onChange={(event) => {
+                      const nextArea = event.currentTarget.value as MarieArea;
+                      setSelectedArea(nextArea);
+                      setSelectedConcern((current) => current && isTreatmentConcernCompatible(current, nextArea) ? current : "");
+                    }} className="h-11 rounded-xl border border-border bg-white px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-blue-100">
                       <option value="FACIAL">Facial</option>
                       <option value="BODY">Corporal</option>
                       <option value="BOTH">Facial e corporal</option>
                     </select>
                   </label>
-                  <TextField label="Queixa principal" name="chiefComplaint" value={draftPayload.chiefComplaint ?? anamnesis?.chiefComplaint} textarea required placeholder="Ex.: gordura localizada, acne, manchas, flacidez, rejuvenescimento..." />
+                  <label className="grid gap-1.5 text-sm font-medium text-foreground">Indicação principal
+                    <select name="primaryTreatmentConcern" value={selectedConcern} onChange={(event) => setSelectedConcern(event.currentTarget.value as MarieProtocolKey | "")} className="h-11 rounded-xl border border-border bg-white px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-blue-100">
+                      <option value="">Selecione para orientar a Marie</option>
+                      {selectedArea === "BOTH" ? (
+                        <>
+                          <optgroup label="Faciais">
+                            {concernOptions.filter((option) => option.area === "FACIAL").map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                          </optgroup>
+                          <optgroup label="Corporais">
+                            {concernOptions.filter((option) => option.area === "BODY").map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                          </optgroup>
+                        </>
+                      ) : concernOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                  </label>
+                  {findingOptions.length > 0 && (
+                    <SelectField label="Achado principal" name="mainFinding" value={draftPayload.mainFinding ?? assessment?.mainFinding} options={[["", "Não informado"], ...findingOptions.map((option) => [option, option])]} />
+                  )}
+                  <TextField label="Detalhes da queixa relatada" name="chiefComplaint" value={draftPayload.chiefComplaint ?? anamnesis?.chiefComplaint} textarea required placeholder="Ex.: paciente relata cravos, oleosidade intensa, abdômen/flancos, manchas ou sensibilidade..." />
                   <TextField label="Objetivo do atendimento" name="treatmentGoal" value={draftPayload.treatmentGoal ?? anamnesis?.treatmentGoal} textarea placeholder="Ex.: reduzir medidas, melhorar textura da pele, controlar oleosidade..." />
                   <TextField label="Restrições / contraindicações" name="contraindications" value={draftPayload.contraindications ?? anamnesis?.contraindications} textarea placeholder="Ex.: alergias, gestação, uso de ácidos, sensibilidade, doenças, medicações..." />
                   <TextField label="Observações profissionais" name="notes" value={draftPayload.notes ?? anamnesis?.notes} textarea placeholder="Registre sua análise inicial, pontos de atenção e observações relevantes..." />
@@ -356,11 +533,17 @@ export function CareTabs({ data, activeTab, setActiveTab, draftAction, clearDraf
               </AccordionSection>
 
               <AccordionSection title="Pele e sensibilidade" description="Dados úteis para a Marie ajustar cautela, fotoproteção e barreira cutânea.">
-                <TextField label="Tipo de pele" name="skinType" value={draftPayload.skinType ?? anamnesis?.skinType} textarea />
-                <TextField label="Sensibilidade" name="skinSensitivity" value={draftPayload.skinSensitivity ?? anamnesis?.skinSensitivity} textarea />
-                <TextField label="Uso recente de ácidos/retinoides" name="acidUseNotes" value={draftPayload.acidUseNotes} textarea />
-                <TextField label="Exposição solar recente" name="sunExposureNotes" value={draftPayload.sunExposureNotes} textarea />
-                <TextField label="Fotoproteção" name="photoprotectionNotes" value={draftPayload.photoprotectionNotes} textarea />
+                <SelectField label="Tipo de pele" name="skinType" value={draftPayload.skinType ?? anamnesis?.skinType} options={skinTypeOptions} />
+                <SelectField label="Sensibilidade" name="skinSensitivity" value={draftPayload.skinSensitivity ?? anamnesis?.skinSensitivity} options={sensitivityOptions} />
+                <SelectField label="Fotoproteção" name="photoprotection" value={draftPayload.photoprotection ?? assessment?.photoprotection} options={photoprotectionOptions} />
+                <SelectField label="Exposição solar" name="sunExposure" value={draftPayload.sunExposure ?? assessment?.sunExposure} options={sunExposureOptions} />
+                <SelectField label="Uso recente de ácidos/retinoides" name="acidRetinoidUse" value={draftPayload.acidRetinoidUse ?? assessment?.acidRetinoidUse} options={acidUseOptions} />
+                <SelectField label="Medicamento sensibilizante / Roacutan / isotretinoína" name="sensitizingMedication" value={draftPayload.sensitizingMedication ?? assessment?.sensitizingMedication} options={sensitizingMedicationOptions} />
+              </AccordionSection>
+
+              <AccordionSection title="Contraindicações e hábitos estruturados" description="Seleções padronizadas reduzem ambiguidades para a Marie.">
+                <CheckboxGroup label="Contraindicações importantes" name="structuredContraindications" options={contraindicationOptions} value={draftPayload.structuredContraindications ?? assessment?.structuredContraindications} />
+                <CheckboxGroup label="Hábitos relevantes" name="structuredHabits" options={habitOptions} value={draftPayload.structuredHabits ?? assessment?.structuredHabits} />
               </AccordionSection>
 
               <AccordionSection title="Avaliação estética inicial" description="Achados técnicos mantidos para avaliação, IA e plano de cuidado.">

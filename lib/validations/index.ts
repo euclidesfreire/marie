@@ -49,6 +49,14 @@ export const createAppointmentSchema = z.object({
 
 export const createAssessmentSchema = z.object({
   assessedArea: z.enum(["FACIAL", "BODY", "BOTH"]),
+  primaryTreatmentConcern: optionalText,
+  mainFinding: optionalText,
+  photoprotection: optionalText,
+  sunExposure: optionalText,
+  acidRetinoidUse: optionalText,
+  sensitizingMedication: optionalText,
+  structuredContraindications: optionalText,
+  structuredHabits: optionalText,
   professionalAnalysis: optionalText,
   skinCondition: optionalText,
   bodyCondition: optionalText,

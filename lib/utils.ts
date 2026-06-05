@@ -14,8 +14,8 @@ export async function getCurrentUser() {
   if (!user) {
     user = await prisma.user.create({
       data: {
-        name: "Dra. Marina Costa",
-        email: "profissional@marie.app",
+        name: "Aluno Senac",
+        email: "estetica@senac.br",
         role: "PROFESSIONAL"
       }
     });
